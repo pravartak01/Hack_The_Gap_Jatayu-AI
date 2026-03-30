@@ -473,3 +473,222 @@ ActivityLog:
 - Node.js + Express.js
 - MongoDB + Mongoose
 - JWT auth + RBAC middleware
+
+## 14) Citizen Complaint System
+
+Citizens can raise complaints with image/video evidence. Admin reviews and routes to departments.
+
+### Citizen Complaint APIs (JWT Required)
+
+Base path: `/citizen`
+
+#### POST /citizen/complaints
+Citizen creates a new complaint with title, description, and uploads 1-10 images/videos.
+
+Request type: `multipart/form-data`
+
+Form fields:
+- title: string (required)
+- description: string (required)
+- files: multiple files (optional, up to 10)
+  - Accepted: image/* or video/*
+  - Max 10 MB per image
+  - Max 100 MB per video
+
+Example using FormData (JavaScript):
+```javascript
+const formData = new FormData();
+formData.append('title', 'Pothole on Main Road');
+formData.append('description', 'Large pothole causing traffic issues');
+formData.append('files', imageFile1);
+formData.append('files', imageFile2);
+
+fetch('http://localhost:5000/citizen/complaints', {
+  method: 'POST',
+  body: formData,
+  headers: { Authorization: 'Bearer TOKEN' },
+  credentials: 'include'
+});
+```
+
+Response:
+```json
+{
+  "message": "Complaint created successfully",
+  "complaint": {
+    "complaintId": "CMP-20260330-ABC123",
+    "citizen": "...",
+    "citizenName": "John Doe",
+    "citizenEmail": "john@example.com",
+    "title": "Pothole on Main Road",
+    "description": "Large pothole causing traffic issues",
+    "media": [
+      {
+        "type": "image",
+        "url": "https://res.cloudinary.com/.../image.jpg",
+        "publicId": "complaints/..."
+      }
+    ],
+    "status": "Pending",
+    "logs": [...]
+  }
+}
+```
+
+#### GET /citizen/complaints
+Citizen views all their own complaints.
+
+Response:
+```json
+{
+  "complaints": [ ... ]
+}
+```
+
+#### GET /citizen/complaints/:complaintId
+Citizen views specific complaint details.
+
+### Admin Complaint Management APIs
+
+Base path: `/admin`
+
+#### GET /admin/complaints
+Admin views all citizen complaints (all statuses).
+
+Response:
+```json
+{
+  "complaints": [ ... ]
+}
+```
+
+#### GET /admin/complaints/pending
+Admin views only pending complaints (newest first).
+
+Useful for dashboard to show complaints awaiting review.
+
+#### PATCH /admin/complaints/status
+Admin updates complaint review status (e.g., mark as "Under Review").
+
+Body:
+```json
+{
+  "complaintId": "CMP-20260330-ABC123",
+  "status": "Under Review"
+}
+```
+
+Allowed status values:
+- Pending
+- Under Review
+- Routed (automatically set when routed to department)
+- Resolved
+
+#### POST /admin/complaints/route
+Admin categorizes complaint and routes it to the appropriate department.
+
+This creates an Issue ticket assigned to the department.
+
+Body:
+```json
+{
+  "complaintId": "CMP-20260330-ABC123",
+  "category": "accident",
+  "department": "TRAFFIC"
+}
+```
+
+Category examples:
+- fire
+- accident
+- garbage_dumping
+- pothole
+- street_damage
+- (any text)
+
+Department values:
+- FIRE
+- POLICE
+- TRAFFIC
+- MUNICIPAL
+
+Response:
+```json
+{
+  "message": "Complaint routed to department successfully",
+  "issue": {
+    "issueId": "ISS-20260330-XYZ789",
+    "hazardType": "accident",
+    "assignedDepartment": "TRAFFIC",
+    "status": "Pending",
+    "logs": [...]
+  },
+  "complaint": {
+    "status": "Routed",
+    "issueId": "ISS-20260330-XYZ789",
+    "assignedDepartment": "TRAFFIC"
+  }
+}
+```
+
+### Complaint Lifecycle
+
+- Pending
+   - New complaint from citizen
+   - Visible on admin dashboard
+
+- Under Review
+   - Admin is reviewing the complaint details
+   - (Optional, admin can skip to Routed directly)
+
+- Routed
+   - Admin categorized and sent to department
+   - Issue ticket created and assigned
+   - Department starts handling it as an issue
+
+- Resolved
+   - Department marked issue as Resolved with proof
+   - Complaint automatically marked Resolved
+
+### Admin Dashboard Integration
+
+Show on admin dashboard:
+1. Count of Pending complaints
+2. List of Pending complaints with:
+   - Citizen name
+   - Complaint title
+   - Media count
+   - Created date
+3. On click: full details with media preview
+4. Action buttons:
+   - Review (PATCH status to "Under Review")
+   - Route to Department (POST to route endpoint)
+   - View all (GET /admin/complaints)
+
+### Frontend Citizen Module Flow
+
+1. Citizen login
+2. Click "Raise Complaint"
+3. Fill title, description
+4. Upload 1-10 images/videos
+5. Submit (POST /citizen/complaints)
+6. View complaint status (GET /citizen/complaints/:complaintId)
+- Show status badge (Pending / Under Review / Routed / Resolved)
+- Show activity logs
+
+### Frontend Admin Module Flow
+
+1. Admin login
+2. Dashboard shows pending complaints count
+3. Click "View Complaints"
+4. Load pending complaints list (GET /admin/complaints/pending)
+5. For each complaint:
+   - Show citizen info, title, media preview
+   - Categorize dropdown (fire, accident, etc.)
+   - Department dropdown (FIRE, POLICE, TRAFFIC, MUNICIPAL)
+   - Route button
+6. After routing:
+   - Issue created and assigned
+   - Complaint status becomes "Routed"
+   - Department can now see issue on their dashboard
+

@@ -8,6 +8,7 @@ const adminRoutes = require("./routes/admin.routes");
 const fireRoutes = require("./routes/fire.routes");
 const policeRoutes = require("./routes/police.routes");
 const trafficRoutes = require("./routes/traffic.routes");
+const citizenRoutes = require("./routes/citizen.routes");
 const coreRoutes = require("./routes/core.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
 const { errorHandler } = require("./middlewares/error.middleware");
@@ -34,6 +35,7 @@ app.use("/admin", adminRoutes);
 app.use("/fire", fireRoutes);
 app.use("/police", policeRoutes);
 app.use("/traffic", trafficRoutes);
+app.use("/citizen", citizenRoutes);
 app.use("/dashboard", dashboardRoutes);
 app.use("/", coreRoutes);
 

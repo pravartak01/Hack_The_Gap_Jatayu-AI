@@ -32,8 +32,17 @@ function allowRoles(...roles) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ message: "Forbidden: insufficient role" });
+    const normalizedUserRole = String(req.user.role || "")
+      .trim()
+      .toUpperCase();
+    const normalizedAllowedRoles = roles.map((role) => String(role || "").trim().toUpperCase());
+
+    if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
+      return res.status(403).json({
+        message: "Forbidden: insufficient role",
+        currentRole: normalizedUserRole,
+        expectedRoles: normalizedAllowedRoles,
+      });
     }
 
     return next();

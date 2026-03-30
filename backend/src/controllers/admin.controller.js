@@ -1,6 +1,7 @@
 const Hazard = require("../models/Hazard");
 const Issue = require("../models/Issue");
 const ActivityLog = require("../models/ActivityLog");
+const Complaint = require("../models/Complaint");
 const { mapHazardToDepartment, normalizeHazardType } = require("../constants/hazardRouting");
 const { generateIssueId } = require("../utils/issueId");
 const { fetchHazardVideosFromFolder } = require("../utils/cloudinary");
@@ -94,6 +95,132 @@ async function routeHazard(req, res) {
   await hazard.save();
 
   return res.status(201).json({ message: "Hazard routed successfully", issue });
+}
+
+async function getAllComplaints(req, res) {
+  const complaints = await Complaint.find().sort({ createdAt: -1 });
+  return res.status(200).json({ complaints });
+}
+
+async function getPendingComplaints(req, res) {
+  const complaints = await Complaint.find({ status: "Pending" }).sort({ createdAt: -1 });
+  return res.status(200).json({ complaints });
+}
+
+async function updateComplaintStatus(req, res) {
+  const { complaintId, status } = req.body;
+
+  if (!complaintId || !status) {
+    return res.status(400).json({ message: "complaintId and status are required" });
+  }
+
+  if (!["Pending", "Under Review", "Routed", "Resolved"].includes(status)) {
+    return res.status(400).json({
+      message: "status must be Pending, Under Review, Routed or Resolved",
+    });
+  }
+
+  const complaint = await Complaint.findOne({ complaintId });
+  if (!complaint) {
+    return res.status(404).json({ message: "Complaint not found" });
+  }
+
+  complaint.status = status;
+  complaint.logs.push({
+    message: `Status updated to ${status}`,
+    action: "STATUS_UPDATED",
+    createdBy: {
+      userId: req.user._id,
+      role: req.user.role,
+      name: req.user.name,
+    },
+  });
+
+  await complaint.save();
+  return res.status(200).json({ message: "Complaint status updated", complaint });
+}
+
+async function routeComplaintToDepartment(req, res) {
+  const { complaintId, category, department } = req.body;
+
+  if (!complaintId || !category || !department) {
+    return res.status(400).json({ message: "complaintId, category and department are required" });
+  }
+
+  const complaint = await Complaint.findOne({ complaintId });
+  if (!complaint) {
+    return res.status(404).json({ message: "Complaint not found" });
+  }
+
+  if (complaint.issueId) {
+    const existingIssue = await Issue.findOne({ issueId: complaint.issueId });
+    return res.status(200).json({ message: "Complaint already routed", issue: existingIssue });
+  }
+
+  const issueId = generateIssueId();
+
+  const issue = await Issue.create({
+    issueId,
+    hazard: null,
+    hazardType: String(category).toLowerCase().trim(),
+    assignedDepartment: String(department).toUpperCase().trim(),
+    status: "Pending",
+    evidenceUrl: complaint.media.length > 0 ? complaint.media[0].url : "",
+    location: {
+      address: `Complaint from ${complaint.citizenName}`,
+      coordinates: { lat: 0, lng: 0 },
+    },
+    logs: [
+      {
+        message: `Issue created from complaint and routed to ${department}`,
+        action: "ROUTED_FROM_COMPLAINT",
+        createdBy: {
+          userId: req.user._id,
+          role: req.user.role,
+          name: req.user.name,
+        },
+      },
+    ],
+  });
+
+  await ActivityLog.create({
+    issue: issue._id,
+    issueId: issue.issueId,
+    action: "ROUTED_FROM_COMPLAINT",
+    message: `Complaint routed to ${department}`,
+    actor: {
+      userId: req.user._id,
+      name: req.user.name,
+      role: req.user.role,
+    },
+    metadata: {
+      complaintId: complaint.complaintId,
+      category,
+      citizenEmail: complaint.citizenEmail,
+    },
+  });
+
+  complaint.category = String(category).toLowerCase().trim();
+  complaint.assignedDepartment = String(department).toUpperCase().trim();
+  complaint.status = "Routed";
+  complaint.issueId = issue.issueId;
+  complaint.logs.push({
+    message: `Routed to ${department}`,
+    action: "ROUTED",
+    createdBy: {
+      userId: req.user._id,
+      role: req.user.role,
+      name: req.user.name,
+    },
+  });
+
+  await complaint.save();
+
+  return res.status(201).json({
+    message: "Complaint routed to department successfully",
+    issue,
+    complaint,
+  });
 }
 
 async function getAllIssues(req, res) {
@@ -201,4 +328,8 @@ module.exports = {
   getAdminDashboard,
   getCloudinaryHazardVideos,
   importCloudinaryHazard,
+  getAllComplaints,
+  getPendingComplaints,
+  updateComplaintStatus,
+  routeComplaintToDepartment,
 };

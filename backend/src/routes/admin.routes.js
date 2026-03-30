@@ -8,6 +8,10 @@ const {
   getAdminDashboard,
   getCloudinaryHazardVideos,
   importCloudinaryHazard,
+  getAllComplaints,
+  getPendingComplaints,
+  updateComplaintStatus,
+  routeComplaintToDepartment,
 } = require("../controllers/admin.controller");
 const { ROLES } = require("../constants/roles");
 
@@ -22,5 +26,9 @@ router.post("/hazards", createHazard);
 router.get("/hazards", getHazards);
 router.post("/route-hazard", routeHazard);
 router.get("/all-issues", getAllIssues);
+router.get("/complaints", getAllComplaints);
+router.get("/complaints/pending", getPendingComplaints);
+router.patch("/complaints/status", updateComplaintStatus);
+router.post("/complaints/route", routeComplaintToDepartment);
 
 module.exports = router;
