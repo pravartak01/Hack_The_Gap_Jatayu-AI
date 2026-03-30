@@ -5,6 +5,8 @@ const Complaint = require("../models/Complaint");
 const { mapHazardToDepartment, normalizeHazardType } = require("../constants/hazardRouting");
 const { generateIssueId } = require("../utils/issueId");
 const { fetchHazardVideosFromFolder } = require("../utils/cloudinary");
+const { sendHazardAlertEmail } = require("../utils/mailer");
+const { HAZARD_ALERT_EMAILS } = require("../constants/alertEmails");
 
 async function createHazard(req, res) {
   const { type, evidenceUrl, location, timestamp } = req.body;
@@ -320,6 +322,41 @@ async function importCloudinaryHazard(req, res) {
   });
 }
 
+async function testHazardAlert(req, res) {
+  const { hazardType, location, description } = req.body;
+
+  if (!hazardType) {
+    return res.status(400).json({ message: "hazardType is required" });
+  }
+
+  if (HAZARD_ALERT_EMAILS.length === 0) {
+    return res.status(400).json({
+      message: "No email recipients configured. Please add emails to HAZARD_ALERT_EMAILS in constants/alertEmails.js",
+    });
+  }
+
+  try {
+    const info = await sendHazardAlertEmail({
+      recipients: HAZARD_ALERT_EMAILS,
+      hazardType: String(hazardType).trim(),
+      location: location ? String(location).trim() : "Not specified",
+      description: description ? String(description).trim() : "Test hazard alert",
+    });
+
+    return res.status(200).json({
+      message: "Hazard alert email sent successfully",
+      emailsCount: HAZARD_ALERT_EMAILS.length,
+      recipients: HAZARD_ALERT_EMAILS,
+      mailInfo: process.env.SMTP_HOST ? info : { jsonTransport: true, message: "Email sent via JSON transport (dev mode)" },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to send hazard alert email",
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   createHazard,
   getHazards,
@@ -332,4 +369,5 @@ module.exports = {
   getPendingComplaints,
   updateComplaintStatus,
   routeComplaintToDepartment,
+  testHazardAlert,
 };

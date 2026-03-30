@@ -12,6 +12,7 @@ const {
   getPendingComplaints,
   updateComplaintStatus,
   routeComplaintToDepartment,
+  testHazardAlert,
 } = require("../controllers/admin.controller");
 const { ROLES } = require("../constants/roles");
 
@@ -30,5 +31,6 @@ router.get("/complaints", getAllComplaints);
 router.get("/complaints/pending", getPendingComplaints);
 router.patch("/complaints/status", updateComplaintStatus);
 router.post("/complaints/route", routeComplaintToDepartment);
+router.post("/test-hazard-alert", testHazardAlert);
 
 module.exports = router;
