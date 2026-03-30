@@ -108,6 +108,30 @@ export const api = {
     return request('/admin/all-issues', { token });
   },
 
+  getAllComplaints(token) {
+    return request('/admin/complaints', { token });
+  },
+
+  getPendingComplaints(token) {
+    return request('/admin/complaints/pending', { token });
+  },
+
+  updateComplaintStatus(token, payload) {
+    return request('/admin/complaints/status', {
+      method: 'PATCH',
+      token,
+      body: payload,
+    });
+  },
+
+  routeComplaint(token, payload) {
+    return request('/admin/complaints/route', {
+      method: 'POST',
+      token,
+      body: payload,
+    });
+  },
+
   getCloudinaryHazardVideos(token, { folder, maxResults, nextCursor } = {}) {
     const params = new URLSearchParams();
 

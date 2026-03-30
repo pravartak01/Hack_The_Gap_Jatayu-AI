@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import Sidebar from './Sidebar.jsx'
+import { api } from '../lib/api.js'
 import LiveAlertsCommand from './pages/LiveAlertsCommand/LiveAlertsCommand.jsx'
 import GarbageMonitoring from './pages/GarbageMonitoring/GarbageMonitoring.jsx'
 import CitizenReports from './pages/CitizenReports/CitizenReports.jsx'
@@ -142,6 +143,7 @@ export default function MainLayout({ session, onLogout = () => {} }) {
   const [refreshing, setRefreshing]   = useState(false)
   const [refreshTick, setRefreshTick] = useState(0)
   const [mobileOpen, setMobileOpen]   = useState(false)
+  const [badgeCounts, setBadgeCounts] = useState({})
 
   const userName = session?.user?.name || ''
   const userRole = (session?.user?.role || '').toUpperCase()
@@ -171,6 +173,95 @@ export default function MainLayout({ session, onLogout = () => {} }) {
     document.documentElement.setAttribute('data-jatayu-theme', isDark ? 'dark' : 'light')
     localStorage.setItem('jatayu-theme', isDark ? 'dark' : 'light')
   }, [isDark])
+
+  useEffect(() => {
+    const token = session?.token
+    const role = String(session?.user?.role || '').toUpperCase()
+
+    if (!token || !role) {
+      setBadgeCounts({})
+      return
+    }
+
+    let cancelled = false
+
+    const readArray = (result, key) => {
+      if (result.status !== 'fulfilled') return []
+      const rows = result.value?.[key]
+      return Array.isArray(rows) ? rows : []
+    }
+
+    const unresolvedIssueCount = (issues) =>
+      issues.filter((issue) => String(issue.status || '').toUpperCase() !== 'RESOLVED').length
+
+    const unresolvedComplaintCount = (complaints) =>
+      complaints.filter((item) => String(item.status || '').toUpperCase() !== 'RESOLVED').length
+
+    const loadBadgeCounts = async () => {
+      try {
+        if (role === 'ADMIN') {
+          const [issuesRes, videosRes, complaintsRes] = await Promise.allSettled([
+            api.getAllIssues(token),
+            api.getCloudinaryHazardVideos(token),
+            api.getAllComplaints(token),
+          ])
+
+          const issues = readArray(issuesRes, 'issues')
+          const complaints = readArray(complaintsRes, 'complaints')
+          const videos = readArray(videosRes, 'videos')
+
+          if (!cancelled) {
+            setBadgeCounts({
+              'live-alerts': unresolvedIssueCount(issues),
+              'camera-network': videos.length,
+              'citizen-reports': unresolvedComplaintCount(complaints),
+            })
+          }
+          return
+        }
+
+        if (role === 'MUNICIPAL') {
+          const [issuesRes, complaintsRes] = await Promise.allSettled([
+            api.getAssignedIssues(token, role),
+            api.getAllComplaints(token),
+          ])
+
+          const issues = readArray(issuesRes, 'issues')
+          const complaints = readArray(complaintsRes, 'complaints')
+
+          if (!cancelled) {
+            setBadgeCounts({
+              'live-alerts': unresolvedIssueCount(issues),
+              'camera-network': issues.length,
+              'citizen-reports': unresolvedComplaintCount(complaints),
+            })
+          }
+          return
+        }
+
+        const issueData = await api.getAssignedIssues(token, role)
+        const issues = Array.isArray(issueData?.issues) ? issueData.issues : []
+
+        if (!cancelled) {
+          setBadgeCounts({
+            'live-alerts': unresolvedIssueCount(issues),
+            'camera-network': issues.length,
+            'citizen-reports': null,
+          })
+        }
+      } catch {
+        if (!cancelled) {
+          setBadgeCounts({})
+        }
+      }
+    }
+
+    void loadBadgeCounts()
+
+    return () => {
+      cancelled = true
+    }
+  }, [session?.token, session?.user?.role, refreshTick])
 
   const safePageKey = allowedPageIds.includes(activePage) ? activePage : (allowedPageIds[0] || 'live-alerts')
   const page = PAGES[safePageKey]
@@ -208,6 +299,7 @@ export default function MainLayout({ session, onLogout = () => {} }) {
             collapsed={collapsed}
             onCollapse={() => setCollapsed(v => !v)}
             session={session}
+            badgeCounts={badgeCounts}
           />
         </div>
 

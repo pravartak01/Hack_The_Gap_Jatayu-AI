@@ -78,9 +78,9 @@ const NAV_SECTIONS = [
   {
     group: 'Operations',
     items: [
-      { id: 'live-alerts',        label: 'Live Alerts',        icon: icons.alert,         badge: '3', badgeColor: '#ef4444' },
-      { id: 'camera-network',     label: 'Camera Network',     icon: icons.camera,        badge: 'LIVE', badgeColor: '#10b981' },
-      { id: 'citizen-reports',    label: 'Citizen Reports',    icon: icons.messageSquare, badge: '12', badgeColor: '#f59e0b' },
+      { id: 'live-alerts',        label: 'Live Alerts',        icon: icons.alert,         badgeColor: '#ef4444' },
+      { id: 'camera-network',     label: 'Camera Network',     icon: icons.camera,        badgeColor: '#10b981' },
+      { id: 'citizen-reports',    label: 'Citizen Reports',    icon: icons.messageSquare, badgeColor: '#f59e0b' },
     ],
   },
   {
@@ -132,7 +132,7 @@ const StatusDot = () => (
   }}/>
 )
 
-export default function Sidebar({ active, onChange, isDark, onThemeToggle, collapsed, onCollapse, session }) {
+export default function Sidebar({ active, onChange, isDark, onThemeToggle, collapsed, onCollapse, session, badgeCounts = {} }) {
   const [hovered, setHovered] = useState(null)
   const isCollapsed = collapsed
 
@@ -233,9 +233,9 @@ export default function Sidebar({ active, onChange, isDark, onThemeToggle, colla
                           <span className="jtsb-item-label">{item.label}</span>
                         )}
 
-                        {!isCollapsed && item.badge && (
+                        {!isCollapsed && badgeCounts[item.id] != null && (
                           <span className="jtsb-badge" style={{ '--bc': item.badgeColor }}>
-                            {item.badge}
+                            {badgeCounts[item.id]}
                           </span>
                         )}
 
