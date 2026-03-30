@@ -201,6 +201,19 @@ function ExpandedDetail({ incident }) {
           <div className="ih-exp-label"><Ic.fileText width={11} height={11}/>Action taken</div>
           <div className="ih-exp-val ih-exp-action">{incident.actionSummary}</div>
         </div>
+        {incident.evidenceUrl && (
+          <div className="ih-exp-block ih-exp-full">
+            <div className="ih-exp-label"><Ic.video width={11} height={11}/>Evidence</div>
+            <div className="ih-exp-val">
+              <video
+                src={incident.evidenceUrl}
+                controls
+                className="ih-evidence-video"
+                style={{ maxWidth: '320px', borderRadius: '10px', border: '1px solid rgba(148,163,184,0.5)' }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -327,6 +340,7 @@ function mapIssueToIncident(issue) {
     closedAt,
     location: issue.location?.address || '—',
     actionSummary: issue.logs?.[issue.logs.length - 1]?.message || 'Issue created and assigned via Jatayu.',
+    evidenceUrl: issue.evidenceUrl || '',
   }
 }
 

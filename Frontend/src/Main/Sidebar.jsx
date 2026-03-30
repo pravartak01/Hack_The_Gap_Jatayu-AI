@@ -137,7 +137,7 @@ export default function Sidebar({ active, onChange, isDark, onThemeToggle, colla
   const isCollapsed = collapsed
 
   const userName = session?.user?.name || ''
-  const userRole = session?.user?.role || ''
+  const userRole = (session?.user?.role || '').toUpperCase()
   const userInitials = userName
     ? userName
         .split(' ')
@@ -156,6 +156,13 @@ export default function Sidebar({ active, onChange, isDark, onThemeToggle, colla
   }
 
   const resolvedRoleLabel = userRole ? (roleLabelMap[userRole] || userRole) : 'Official'
+
+  const isAdmin = userRole === 'ADMIN'
+  const adminOnlyIds = new Set(['garbage-monitoring', 'department-panel', 'analytics'])
+  const visibleSections = NAV_SECTIONS.map(section => ({
+    ...section,
+    items: section.items.filter(item => isAdmin || !adminOnlyIds.has(item.id)),
+  })).filter(section => section.items.length > 0)
 
   return (
     <>
@@ -198,7 +205,7 @@ export default function Sidebar({ active, onChange, isDark, onThemeToggle, colla
 
         {/* ── Navigation ─────────────────────────── */}
         <nav className="jtsb-nav">
-          {NAV_SECTIONS.map((section, si) => (
+          {visibleSections.map((section, si) => (
             <div key={section.group} className="jtsb-section" style={{ '--si': si }}>
               {!isCollapsed && (
                 <p className="jtsb-section-label">{section.group}</p>

@@ -2,11 +2,11 @@ const express = require("express");
 const { requireAuth, allowRoles } = require("../middlewares/auth.middleware");
 const { uploadMedia } = require("../middlewares/upload.middleware");
 const { createComplaint, getMyCitizensComplaints, getComplaintDetail } = require("../controllers/citizen.controller");
-const { ROLES } = require("../constants/roles");
+// const { ROLES } = require("../constants/roles");
 
 const router = express.Router();
 
-router.use(requireAuth, allowRoles(ROLES.CITIZEN));
+router.use(requireAuth);
 
 // Debug endpoint to see what multer receives
 router.post("/complaints-debug", uploadMedia, (req, res) => {

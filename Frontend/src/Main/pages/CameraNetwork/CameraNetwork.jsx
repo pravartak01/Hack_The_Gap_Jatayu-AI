@@ -8,49 +8,49 @@ const NETWORK_CAMERAS = [
     id: 'net-01',
     name: 'Crossroad Junction – North',
     location: 'Ward 12, Junction 4',
-    status: 'Online',
-    lastSeen: 'Live now',
+    status: 'Offline',
+    lastSeen: 'No signal · 2m ago',
     streamId: 'STR-01',
-    uptime: '99.8%',
-    fps: 30,
-    res: '1080p',
-    bitrate: '4.2 Mbps',
+    uptime: '0%',
+    fps: 0,
+    res: '—',
+    bitrate: '—',
   },
   {
     id: 'net-02',
     name: 'Market Street – Central',
     location: 'Main market, Block C',
-    status: 'Online',
-    lastSeen: 'Live now',
+    status: 'Offline',
+    lastSeen: 'No signal · 3m ago',
     streamId: 'STR-08',
-    uptime: '98.1%',
-    fps: 25,
-    res: '1080p',
-    bitrate: '3.8 Mbps',
+    uptime: '0%',
+    fps: 0,
+    res: '—',
+    bitrate: '—',
   },
   {
     id: 'net-03',
     name: 'Bus Depot – Entry Gate',
     location: 'Transport hub, Gate 2',
-    status: 'Degraded',
-    lastSeen: 'Signal weak · 1m ago',
+    status: 'Offline',
+    lastSeen: 'No signal · 5m ago',
     streamId: 'STR-12',
-    uptime: '72.4%',
-    fps: 8,
-    res: '480p',
-    bitrate: '0.9 Mbps',
+    uptime: '0%',
+    fps: 0,
+    res: '—',
+    bitrate: '—',
   },
   {
     id: 'net-04',
     name: 'Hospital – Emergency Bay',
     location: 'City hospital, rear wing',
-    status: 'Online',
-    lastSeen: 'Live now',
+    status: 'Offline',
+    lastSeen: 'No signal · 1m ago',
     streamId: 'STR-15',
-    uptime: '99.9%',
-    fps: 30,
-    res: '4K',
-    bitrate: '12.1 Mbps',
+    uptime: '0%',
+    fps: 0,
+    res: '—',
+    bitrate: '—',
   },
   {
     id: 'net-05',
@@ -68,13 +68,13 @@ const NETWORK_CAMERAS = [
     id: 'net-06',
     name: 'School Zone – South Road',
     location: 'School cluster, South lane',
-    status: 'Online',
-    lastSeen: 'Live now',
+    status: 'Offline',
+    lastSeen: 'No signal · 4m ago',
     streamId: 'STR-27',
-    uptime: '97.3%',
-    fps: 25,
-    res: '1080p',
-    bitrate: '3.5 Mbps',
+    uptime: '0%',
+    fps: 0,
+    res: '—',
+    bitrate: '—',
   },
 ]
 
@@ -139,17 +139,7 @@ const GridIcon = () => (
   </svg>
 )
 
-// ─── Scan overlay (same as LiveAlertsCommand) ─────────────────────────────────
-const ScanOverlay = ({ color, active }) => (
-  <div className="cn-scan-wrap" aria-hidden>
-    {active && <div className="cn-scan-line" style={{ '--scan-color': color }} />}
-    <div className="cn-scan-corner cn-corner-tl" style={{ borderColor: color + 'cc' }} />
-    <div className="cn-scan-corner cn-corner-tr" style={{ borderColor: color + 'cc' }} />
-    <div className="cn-scan-corner cn-corner-bl" style={{ borderColor: color + 'cc' }} />
-    <div className="cn-scan-corner cn-corner-br" style={{ borderColor: color + 'cc' }} />
-    <div className="cn-scan-grid" />
-  </div>
-)
+// Scan overlay removed – static viewport only
 
 // ─── Signal strength bars ─────────────────────────────────────────────────────
 const SignalBars = ({ status }) => {
@@ -232,31 +222,14 @@ const CameraCard = ({ camera, index, onExpand, assignedTo, onAssign }) => {
       {/* Viewport */}
       <div className="cn-viewport">
         <div className="cn-noise" />
-        <div className={`cn-feed-bg${isOffline ? ' cn-feed-offline' : ''}`} />
-        <ScanOverlay color={cfg.scanColor} active={isOnline} />
+        <div className={`cn-feed-bg cn-feed-offline"`} />
+        {/* Unified no-signal overlay for all cards */}
+        <div className="cn-offline-overlay">
+          <PowerIcon />
+          <span className="cn-mono">NO SIGNAL</span>
+        </div>
 
-        {/* Offline overlay */}
-        {isOffline && (
-          <div className="cn-offline-overlay">
-            <PowerIcon />
-            <span className="cn-mono">NO SIGNAL</span>
-          </div>
-        )}
-
-        {/* Degraded overlay */}
-        {camera.status === 'Degraded' && (
-          <div className="cn-degraded-overlay">
-            <span className="cn-mono cn-blink">WEAK SIGNAL</span>
-          </div>
-        )}
-
-        {/* Status pill */}
-        {!isOffline && (
-          <div className="cn-status-pill" style={{ background: cfg.color + 'ee' }}>
-            <span className="cn-status-dot" style={{ background: '#fff', animationPlayState: isOnline ? 'running' : 'paused' }} />
-            {isOnline ? 'LIVE' : 'DEGRADED'}
-          </div>
-        )}
+        {/* Status pill removed since all cards show NO SIGNAL */}
 
         {/* FPS counter */}
         {!isOffline && (
@@ -376,14 +349,11 @@ const FullscreenModal = ({ camera, onClose }) => {
         {/* Viewport */}
         <div className="cn-modal-viewport">
           <div className="cn-noise" />
-          <div className={`cn-feed-bg${isOffline ? ' cn-feed-offline' : ''}`} />
-          <ScanOverlay color={cfg.scanColor} active={!isOffline} />
-          {isOffline && (
-            <div className="cn-offline-overlay">
-              <PowerIcon />
-              <span className="cn-mono">NO SIGNAL</span>
-            </div>
-          )}
+          <div className="cn-feed-bg cn-feed-offline" />
+          <div className="cn-offline-overlay">
+            <PowerIcon />
+            <span className="cn-mono">NO SIGNAL</span>
+          </div>
           <div className="cn-telemetry-tl cn-mono">
             <div>RES: {camera.res}</div>
             <div>FPS: {camera.fps}</div>
@@ -913,31 +883,7 @@ const CSS = `
     filter: grayscale(1);
   }
 
-  /* ── SCAN ────────────────────────────────────── */
-  .cn-scan-wrap { position:absolute; inset:0; z-index:3; pointer-events:none; }
-  .cn-scan-line {
-    position: absolute;
-    left:0; right:0; height:2px;
-    background: linear-gradient(90deg, transparent 0%, var(--scan-color) 30%, var(--scan-color) 70%, transparent 100%);
-    box-shadow: 0 0 12px 3px var(--scan-color), 0 0 24px 6px color-mix(in srgb, var(--scan-color) 30%, transparent);
-    animation: cn-scan 3.5s linear infinite;
-    opacity: 0.8;
-  }
-  .cn-scan-corner {
-    position:absolute; width:13px; height:13px;
-    border-style:solid;
-  }
-  .cn-corner-tl { top:7px; left:7px; border-width:2px 0 0 2px; border-radius:2px 0 0 0; }
-  .cn-corner-tr { top:7px; right:7px; border-width:2px 2px 0 0; border-radius:0 2px 0 0; }
-  .cn-corner-bl { bottom:7px; left:7px; border-width:0 0 2px 2px; border-radius:0 0 0 2px; }
-  .cn-corner-br { bottom:7px; right:7px; border-width:0 2px 2px 0; border-radius:0 0 2px 0; }
-  .cn-scan-grid {
-    position:absolute; inset:0;
-    background-image:
-      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-    background-size:20% 20%;
-  }
+  /* Scan visuals removed for static viewport */
 
   /* ── OVERLAYS ────────────────────────────────── */
   .cn-offline-overlay {

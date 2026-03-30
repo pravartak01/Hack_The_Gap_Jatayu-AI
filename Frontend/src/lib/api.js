@@ -88,11 +88,19 @@ export const api = {
     });
   },
 
-  routeHazard(token, hazardId) {
+  importCloudinaryHazard(token, payload) {
+    return request('/admin/import-cloudinary-hazard', {
+      method: 'POST',
+      token,
+      body: payload,
+    });
+  },
+
+  routeHazard(token, hazardId, departments) {
     return request('/admin/route-hazard', {
       method: 'POST',
       token,
-      body: { hazardId },
+      body: departments ? { hazardId, departments } : { hazardId },
     });
   },
 

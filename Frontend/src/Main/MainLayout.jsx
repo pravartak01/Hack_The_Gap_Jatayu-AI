@@ -144,6 +144,7 @@ export default function MainLayout({ session, onLogout = () => {} }) {
   const [mobileOpen, setMobileOpen]   = useState(false)
 
   const userName = session?.user?.name || ''
+  const userRole = (session?.user?.role || '').toUpperCase()
   const userInitials = userName
     ? userName
         .split(' ')
@@ -153,13 +154,26 @@ export default function MainLayout({ session, onLogout = () => {} }) {
         .join('')
     : 'JA'
 
+  const isAdmin = userRole === 'ADMIN'
+  const restrictedForNonAdmin = new Set(['garbage-monitoring', 'department-panel', 'analytics'])
+  const allowedPageIds = Object.keys(PAGES).filter(id => isAdmin || !restrictedForNonAdmin.has(id))
+
+  // Ensure activePage is always one of the allowed pages for this role
+  useEffect(() => {
+    if (!allowedPageIds.includes(activePage)) {
+      setActivePage(allowedPageIds[0] || 'live-alerts')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userRole])
+
   // Sync theme with DOM
   useEffect(() => {
     document.documentElement.setAttribute('data-jatayu-theme', isDark ? 'dark' : 'light')
     localStorage.setItem('jatayu-theme', isDark ? 'dark' : 'light')
   }, [isDark])
 
-  const page = PAGES[activePage]
+  const safePageKey = allowedPageIds.includes(activePage) ? activePage : (allowedPageIds[0] || 'live-alerts')
+  const page = PAGES[safePageKey]
   const ActiveComponent = page?.component ?? LiveAlertsCommand
 
   const handleRefresh = () => {
@@ -169,6 +183,7 @@ export default function MainLayout({ session, onLogout = () => {} }) {
   }
 
   const handlePageChange = (id) => {
+    if (!allowedPageIds.includes(id)) return
     setActivePage(id)
     setMobileOpen(false)
   }

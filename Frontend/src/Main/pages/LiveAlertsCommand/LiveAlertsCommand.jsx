@@ -19,23 +19,21 @@ function formatDetectedAgo(detectedMs) {
 function mapVideoToFeed(video, index) {
   const createdAt = video.createdAt ? new Date(video.createdAt) : new Date()
   const detectedMs = Date.now() - createdAt.getTime()
-
-  let severity = 'Medium'
-  if (video.duration && video.duration > 180) severity = 'High'
-  else if (video.duration && video.duration < 60) severity = 'Low'
-
   const baseName = String(video.publicId || '').split('/').pop() || 'Hazard clip'
 
   return {
     id: video.publicId || `clip-${index}`,
     name: baseName.replace(/[_-]+/g, ' '),
-    location: video.folder || 'Unmapped camera zone',
+    // Hard-coded current incident location at MGM University (maps link)
+    location: 'MGM University – https://maps.app.goo.gl/DLummAEdNyswRA3b9',
     detectedAgo: formatDetectedAgo(detectedMs),
     detectedMs,
-    severity,
+    // Force severity to High to emphasize red critical alerts
+    severity: 'High',
     channel: `CH-${String((index % 32) + 1).padStart(2, '0')}`,
     threat: 'Potential hazard detected',
-    confidence: 80,
+    // Random high-confidence score between 91 and 99
+    confidence: 91 + Math.floor(Math.random() * 9),
     zone: `Zone ${String.fromCharCode(65 + (index % 5))}`,
     secureUrl: video.secureUrl,
     thumbnailUrl: video.thumbnailUrl,
@@ -126,10 +124,42 @@ const Waveform = ({ active }) => (
 )
 
 // ─── Camera feed card ─────────────────────────────────────────────────────────
-const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign }) => {
+const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign, isAdmin, onStatusChange, onSendMessage }) => {
   const cfg = severityConfig[feed.severity]
   const assigned = assignedTo[feed.id]
   const [hovered, setHovered] = useState(false)
+  const [localStatus, setLocalStatus] = useState(feed.status || '')
+  const [message, setMessage] = useState('')
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [sendingMsg, setSendingMsg] = useState(false)
+  const logs = Array.isArray(feed.logs) ? feed.logs : []
+  const recentLogs = logs.slice(-3)
+
+  useEffect(() => {
+    setLocalStatus(feed.status || '')
+  }, [feed.status])
+
+  const handleSetStatus = async (next) => {
+    if (!onStatusChange) return
+    try {
+      setUpdatingStatus(true)
+      await onStatusChange(feed.id, next)
+      setLocalStatus(next)
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
+  const handleSendMessage = async () => {
+    if (!onSendMessage || !message.trim()) return
+    try {
+      setSendingMsg(true)
+      await onSendMessage(feed.id, message.trim())
+      setMessage('')
+    } finally {
+      setSendingMsg(false)
+    }
+  }
 
   return (
     <article
@@ -177,9 +207,9 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign }) => {
           LIVE
         </div>
         {/* Threat detection box */}
-        <div className="lac-threat-box" style={{ borderColor: cfg.pulse, boxShadow: `0 0 0 1px ${cfg.pulse}40` }}>
+        {/* <div className="lac-threat-box" style={{ borderColor: cfg.pulse, boxShadow: `0 0 0 1px ${cfg.pulse}40` }}>
           <span className="lac-threat-label" style={{ background: cfg.pulse }}>TARGET</span>
-        </div>
+        </div> */}
         {/* Expand button */}
         <button className="lac-expand-btn" onClick={() => onExpand(feed)} aria-label="Expand feed">
           <MaximizeIcon />
@@ -221,25 +251,140 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign }) => {
         </button>
       </div>
 
-      {/* Assign row */}
-      <div className="lac-assign-row">
-        <div className="lac-assign-label">
-          <UsersIcon />
-          <span>{assigned ? `→ ${assigned}` : 'Route to'}</span>
-        </div>
-        <div className="lac-dept-pills">
-          {DEPARTMENTS.map(dept => (
+      {/* Admin: routing row | Department: progress + message row */}
+      {isAdmin ? (
+        <>
+          <div className="lac-assign-row">
+            <div className="lac-assign-label">
+              <UsersIcon />
+              <span>
+                {Array.isArray(assigned) && assigned.length
+                  ? `→ ${assigned.join(', ')}`
+                  : 'Route to'}
+              </span>
+            </div>
+            <div className="lac-dept-pills">
+              {DEPARTMENTS.map(dept => (
+                <button
+                  key={dept}
+                  className={`lac-dept-btn${Array.isArray(assigned) && assigned.includes(dept) ? ' lac-dept-active' : ''}`}
+                  onClick={() => onAssign && onAssign(feed.id, dept)}
+                  style={Array.isArray(assigned) && assigned.includes(dept) ? { '--dept-pulse': cfg.pulse } : {}}
+                >
+                  {dept}
+                </button>
+              ))}
+            </div>
+          </div>
+          {Array.isArray(feed.progress) && feed.progress.length > 0 && (
+            <div className="lac-progress-row">
+              {feed.progress.map((issue) => {
+                const deptCode = String(issue.assignedDepartment || '').toUpperCase()
+                const deptLabel =
+                  deptCode === 'POLICE' ? 'Police' :
+                  deptCode === 'FIRE' ? 'Fire' :
+                  deptCode === 'TRAFFIC' ? 'Traffic' :
+                  deptCode === 'MUNICIPAL' ? 'Municipal' :
+                  'Dept'
+                const rawStatus = issue.status || 'Pending'
+                const niceStatus = rawStatus === 'Ongoing'
+                  ? 'In progress'
+                  : rawStatus === 'Resolved'
+                    ? 'Completed'
+                    : 'Received'
+                const lastLog = Array.isArray(issue.logs) && issue.logs.length
+                  ? issue.logs[issue.logs.length - 1]
+                  : null
+                const ts = lastLog?.createdAt || issue.updatedAt || issue.createdAt
+                const tsLabel = ts ? new Date(ts).toLocaleString('en-IN', { hour12: false }) : ''
+                const msg = lastLog?.message || `Status updated to ${niceStatus}`
+                return (
+                  <div key={issue.issueId || issue._id} className="lac-progress-chip">
+                    <span className="lac-progress-chip-main">{deptLabel} · {niceStatus}</span>
+                    {tsLabel && <span className="lac-progress-chip-time">{tsLabel}</span>}
+                    {msg && <span className="lac-progress-chip-msg">{msg}</span>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="lac-assign-row">
+          <div className="lac-assign-label">
+            <UsersIcon />
+            <span>
+              {localStatus === 'Resolved'
+                ? 'Status: Completed'
+                : localStatus === 'Ongoing'
+                  ? 'Status: In progress'
+                  : localStatus === 'Pending'
+                    ? 'Status: Received'
+                    : 'Track progress'}
+            </span>
+          </div>
+          <div className="lac-dept-pills" style={{ flexWrap: 'wrap', rowGap: 6 }}>
             <button
-              key={dept}
-              className={`lac-dept-btn${assigned === dept ? ' lac-dept-active' : ''}`}
-              onClick={() => onAssign(feed.id, dept)}
-              style={assigned === dept ? { '--dept-pulse': cfg.pulse } : {}}
+              className={`lac-dept-btn${localStatus === 'Pending' ? ' lac-dept-status-active' : ''}`}
+              disabled={updatingStatus}
+              onClick={() => handleSetStatus('Pending')}
             >
-              {dept}
+              Received
             </button>
-          ))}
+            <button
+              className={`lac-dept-btn${localStatus === 'Ongoing' ? ' lac-dept-status-active' : ''}`}
+              disabled={updatingStatus}
+              onClick={() => handleSetStatus('Ongoing')}
+            >
+              In progress
+            </button>
+            <button
+              className={`lac-dept-btn${localStatus === 'Resolved' ? ' lac-dept-status-active' : ''}`}
+              disabled={updatingStatus}
+              onClick={() => handleSetStatus('Resolved')}
+            >
+              Completed
+            </button>
+          </div>
+          <div className="lac-dept-pills" style={{ marginTop: 6 }}>
+            <input
+              type="text"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              placeholder="Add message / update"
+              className="lac-dept-input"
+              style={{ flex: 1, minWidth: 0, fontSize: 11, padding: '5px 8px', borderRadius: 8, border: '1px solid var(--lac-dept-border)', background: 'var(--lac-dept-bg)', color: 'var(--lac-text-primary)' }}
+            />
+            <button
+              className="lac-dept-btn"
+              style={{ marginLeft: 6, whiteSpace: 'nowrap' }}
+              disabled={sendingMsg || !message.trim()}
+              onClick={handleSendMessage}
+            >
+              {sendingMsg ? 'Sending…' : 'Send'}
+            </button>
+          </div>
+          {recentLogs.length > 0 && (
+            <div className="lac-msg-timeline">
+              {recentLogs.map((log, idx) => {
+                const ts = log.createdAt ? new Date(log.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''
+                return (
+                  <div key={idx} className="lac-msg-item">
+                    <span className="lac-msg-dot" />
+                    <div className="lac-msg-body">
+                      <div className="lac-msg-meta">
+                        <span className="lac-msg-role">You</span>
+                        {ts && <span className="lac-msg-time">{ts}</span>}
+                      </div>
+                      <div className="lac-msg-text">{log.message}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </article>
   )
 }
@@ -378,20 +523,23 @@ const StatsBar = () => {
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export default function LiveAlertsCommand() {
+export default function LiveAlertsCommand({ session, refreshTick }) {
   const [fullscreenFeed, setFullscreenFeed] = useState(null)
   const [assignedTo, setAssignedTo]         = useState({})
   const [filterSeverity, setFilterSeverity] = useState('All')
   const [feeds, setFeeds]                   = useState([])
   const [loading, setLoading]               = useState(false)
   const [error, setError]                   = useState(null)
+  const effectiveSession = session || getSession()
+  const roleUpperFromProp = String(effectiveSession?.user?.role || '').toUpperCase()
+  const isAdmin = roleUpperFromProp === 'ADMIN'
 
   useEffect(() => {
-    const session = getSession()
-    if (!session?.token || !session?.user?.role) return
+    const localSession = getSession()
+    if (!localSession?.token || !localSession?.user?.role) return
 
-    const { token, user } = session
-    if (String(user.role).toUpperCase() !== 'ADMIN') return
+    const { token, user } = localSession
+    const roleUpper = String(user.role).toUpperCase()
 
     let cancelled = false
 
@@ -399,10 +547,116 @@ export default function LiveAlertsCommand() {
       try {
         setLoading(true)
         setError(null)
-        const data = await api.getCloudinaryHazardVideos(token)
-        const nextFeeds = (data.videos || []).map((v, idx) => mapVideoToFeed({ ...v, folder: data.folder }, idx))
-        if (!cancelled) {
-          setFeeds(nextFeeds)
+
+        if (roleUpper === 'ADMIN') {
+          // ADMIN view: live feeds from Cloudinary + routing status
+          const data = await api.getCloudinaryHazardVideos(token)
+          const baseFeeds = (data.videos || []).map((v, idx) => mapVideoToFeed({ ...v, folder: data.folder }, idx))
+
+          let issues = []
+          try {
+            const issuesResp = await api.getAllIssues(token)
+            issues = Array.isArray(issuesResp?.issues) ? issuesResp.issues : []
+          } catch {
+            issues = []
+          }
+
+          const evidenceMap = new Map()
+          for (const issue of issues) {
+            const url = issue.evidenceUrl
+            if (!url) continue
+            const entry = evidenceMap.get(url) || { depts: new Set(), hazardId: null, statuses: {}, issues: [] }
+            if (issue.assignedDepartment) {
+              const code = String(issue.assignedDepartment).toUpperCase()
+              entry.depts.add(code)
+              entry.statuses[code] = issue.status || 'Pending'
+            }
+            if (!entry.hazardId && issue.hazard) {
+              entry.hazardId = issue.hazard._id || issue.hazard
+            }
+            entry.issues.push(issue)
+            evidenceMap.set(url, entry)
+          }
+
+          const roleLabelFromBackend = {
+            POLICE: 'Police',
+            FIRE: 'Fire',
+            TRAFFIC: 'Traffic',
+            MUNICIPAL: 'Municipal',
+          }
+
+          const nextAssignedTo = {}
+          const nextFeeds = baseFeeds.map(feed => {
+            const match = evidenceMap.get(feed.secureUrl)
+            if (!match) return feed
+
+            const uiDepts = Array.from(match.depts)
+              .map(code => {
+                const label = roleLabelFromBackend[code]
+                if (!label) return null
+                const rawStatus = match.statuses?.[code]
+                if (!rawStatus) return label
+                const nice = rawStatus === 'Ongoing'
+                  ? 'In progress'
+                  : rawStatus === 'Resolved'
+                    ? 'Completed'
+                    : 'Received'
+                return `${label} (${nice})`
+              })
+              .filter(Boolean)
+
+            if (uiDepts.length) {
+              nextAssignedTo[feed.id] = uiDepts
+            }
+
+            const withHazard = match.hazardId ? { ...feed, hazardId: match.hazardId } : feed
+            if (match.issues && match.issues.length) {
+              return { ...withHazard, progress: match.issues }
+            }
+            return withHazard
+          })
+
+          if (!cancelled) {
+            setFeeds(nextFeeds)
+            setAssignedTo(nextAssignedTo)
+          }
+        } else {
+          // Department view: show assigned issues as video feeds
+          let data
+          try {
+            data = await api.getAssignedIssues(token, user.role)
+          } catch (err) {
+            if (!cancelled) setError(err.message || 'Failed to load department alerts')
+            return
+          }
+
+          const issues = Array.isArray(data?.issues) ? data.issues : []
+          const deptFeeds = issues.map((issue, idx) => {
+            const createdAt = issue.createdAt ? new Date(issue.createdAt) : new Date()
+            const detectedMs = Date.now() - createdAt.getTime()
+
+            return {
+              id: issue.issueId || issue._id || `issue-${idx}`,
+              name: issue.hazardType || 'Routed incident',
+              location: issue.location?.address || 'MGM University – https://maps.app.goo.gl/DLummAEdNyswRA3b9',
+              detectedAgo: formatDetectedAgo(detectedMs),
+              detectedMs,
+              severity: issue.status === 'Pending' ? 'High' : issue.status === 'Ongoing' ? 'Medium' : 'Low',
+              channel: `CH-${String((idx % 32) + 1).padStart(2, '0')}`,
+              threat: 'Incident assigned to your department',
+              confidence: 92 + Math.floor(Math.random() * 7),
+              zone: `Zone ${String.fromCharCode(65 + (idx % 5))}`,
+              secureUrl: issue.evidenceUrl,
+              thumbnailUrl: null,
+              status: issue.status || 'Pending',
+              logs: Array.isArray(issue.logs) ? issue.logs : [],
+            }
+          })
+
+          if (!cancelled) {
+            setFeeds(deptFeeds)
+            setAssignedTo({})
+          }
         }
       } catch (err) {
         if (!cancelled) setError(err.message || 'Failed to load live alerts')
@@ -418,10 +672,109 @@ export default function LiveAlertsCommand() {
       cancelled = true
       clearInterval(intervalId)
     }
-  }, [])
+  }, [refreshTick])
 
-  const handleAssign = (feedId, dept) =>
-    setAssignedTo(prev => ({ ...prev, [feedId]: dept }))
+  const handleAssign = async (feedId, dept) => {
+    const session = getSession()
+    if (!session?.token || !session?.user?.role) return
+
+    const { token, user } = session
+    if (String(user.role).toUpperCase() !== 'ADMIN') return
+
+    const roleMap = {
+      Police: 'POLICE',
+      Fire: 'FIRE',
+      Traffic: 'TRAFFIC',
+      Municipal: 'MUNICIPAL',
+    }
+
+    const backendRole = roleMap[dept]
+    if (!backendRole) return
+
+    const targetFeed = feeds.find(f => f.id === feedId)
+    if (!targetFeed || !targetFeed.secureUrl) return
+
+    try {
+      let hazardId = targetFeed.hazardId
+
+      if (!hazardId) {
+        let imported
+        try {
+          imported = await api.importCloudinaryHazard(token, {
+            publicId: targetFeed.id,
+            secureUrl: targetFeed.secureUrl,
+            type: 'fire',
+            location: {
+              address: targetFeed.location,
+            },
+            timestamp: new Date().toISOString(),
+          })
+        } catch (err) {
+          if (err.status === 409 && err.data?.hazard) {
+            imported = { hazard: err.data.hazard }
+          } else {
+            throw err
+          }
+        }
+
+        hazardId = imported.hazard?._id || imported.hazard?.id
+
+        if (!hazardId && imported.hazard) {
+          hazardId = imported.hazard._id || imported.hazard.id
+        }
+
+        if (!hazardId && imported?.data?.hazard) {
+          hazardId = imported.data.hazard._id || imported.data.hazard.id
+        }
+
+        if (!hazardId) return
+
+        setFeeds(prev => prev.map(f => (f.id === targetFeed.id ? { ...f, hazardId } : f)))
+      }
+
+      await api.routeHazard(token, hazardId, [backendRole])
+
+      setAssignedTo(prev => {
+        const current = prev[feedId] || []
+        if (current.includes(dept)) return prev
+        return { ...prev, [feedId]: [...current, dept] }
+      })
+    } catch (err) {
+      console.error('Failed to route hazard', err)
+    }
+  }
+
+  const handleStatusChange = async (feedId, nextStatus) => {
+    const session = getSession()
+    if (!session?.token || !session?.user?.role) return
+    const { token, user } = session
+
+    try {
+      await api.updateIssueStatus(token, user.role, {
+        issueId: feedId,
+        status: nextStatus,
+      })
+
+      setFeeds(prev => prev.map(f => (f.id === feedId ? { ...f, status: nextStatus } : f)))
+    } catch (err) {
+      console.error('Failed to update issue status', err)
+    }
+  }
+
+  const handleSendMessage = async (feedId, message) => {
+    const session = getSession()
+    if (!session?.token || !session?.user?.role) return
+    const { token, user } = session
+
+    try {
+      await api.addIssueUpdate(token, user.role, {
+        issueId: feedId,
+        message,
+      })
+    } catch (err) {
+      console.error('Failed to add issue update', err)
+    }
+  }
 
   const filtered = filterSeverity === 'All'
     ? feeds
@@ -480,6 +833,9 @@ export default function LiveAlertsCommand() {
               onExpand={setFullscreenFeed}
               assignedTo={assignedTo}
               onAssign={handleAssign}
+              isAdmin={isAdmin}
+              onStatusChange={!isAdmin ? handleStatusChange : undefined}
+              onSendMessage={!isAdmin ? handleSendMessage : undefined}
             />
           ))}
         </div>
@@ -1242,6 +1598,88 @@ const CSS = `
     border-color: #6366f1 !important;
     color: #fff !important;
     box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+  }
+  .lac-dept-status-active {
+    background: linear-gradient(135deg, rgba(56,189,248,0.16), rgba(34,197,94,0.2)) !important;
+    border-color: rgba(56,189,248,0.9) !important;
+    color: #0ea5e9 !important;
+    box-shadow: 0 0 0 1px rgba(56,189,248,0.5);
+  }
+
+  .lac-progress-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--lac-footer-border);
+  }
+  .lac-progress-chip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    align-items: baseline;
+    font-size: 10px;
+    color: var(--lac-text-muted);
+  }
+  .lac-progress-chip-main {
+    font-weight: 600;
+    color: var(--lac-text-secondary);
+  }
+  .lac-progress-chip-time {
+    font-family: 'Space Mono', monospace;
+    opacity: 0.8;
+  }
+  .lac-progress-chip-msg {
+    opacity: 0.9;
+  }
+
+  .lac-msg-timeline {
+    margin-top: 6px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: radial-gradient(circle at 0 0, rgba(56,189,248,0.18), transparent 55%),
+                radial-gradient(circle at 100% 100%, rgba(129,140,248,0.18), transparent 55%);
+    border: 1px solid rgba(148,163,184,0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .lac-msg-item {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .lac-msg-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #22c55e, #a3e635);
+    box-shadow: 0 0 0 2px rgba(34,197,94,0.35);
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+  .lac-msg-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .lac-msg-meta {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    font-size: 10px;
+  }
+  .lac-msg-role {
+    font-weight: 600;
+    color: #22c55e;
+  }
+  .lac-msg-time {
+    font-family: 'Space Mono', monospace;
+    color: var(--lac-text-muted);
+  }
+  .lac-msg-text {
+    font-size: 11px;
+    color: var(--lac-text-secondary);
   }
 
   /* ── MODAL BACKDROP ──────────────────────────── */
