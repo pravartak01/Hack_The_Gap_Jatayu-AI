@@ -4,7 +4,9 @@ const User = require("../models/User");
 async function requireAuth(req, res, next) {
   try {
     const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    const headerToken = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+    const cookieToken = req.cookies ? req.cookies.authToken : null;
+    const token = headerToken || cookieToken;
 
     if (!token) {
       return res.status(401).json({ message: "Authorization token missing" });

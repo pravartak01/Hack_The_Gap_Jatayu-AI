@@ -36,6 +36,14 @@ const hazardSchema = new mongoose.Schema(
       type: String,
       default: "external-detection-service",
     },
+    evidenceProvider: {
+      type: String,
+      default: "external",
+    },
+    evidencePublicId: {
+      type: String,
+      default: null,
+    },
     routed: {
       type: Boolean,
       default: false,

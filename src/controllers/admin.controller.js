@@ -3,6 +3,7 @@ const Issue = require("../models/Issue");
 const ActivityLog = require("../models/ActivityLog");
 const { mapHazardToDepartment, normalizeHazardType } = require("../constants/hazardRouting");
 const { generateIssueId } = require("../utils/issueId");
+const { fetchHazardVideosFromFolder } = require("../utils/cloudinary");
 
 async function createHazard(req, res) {
   const { type, evidenceUrl, location, timestamp } = req.body;
@@ -121,10 +122,83 @@ async function getAdminDashboard(req, res) {
   });
 }
 
+async function getCloudinaryHazardVideos(req, res) {
+  const folder = String(req.query.folder || process.env.CLOUDINARY_HAZARD_FOLDER || "hazards").trim();
+  const maxResults = Number(req.query.maxResults || 30);
+  const nextCursor = req.query.nextCursor ? String(req.query.nextCursor) : undefined;
+
+  if (!folder) {
+    return res.status(400).json({ message: "folder is required" });
+  }
+
+  const { resources, nextCursor: cursor } = await fetchHazardVideosFromFolder({
+    folder,
+    maxResults,
+    nextCursor,
+  });
+
+  const videos = resources.map((item) => ({
+    publicId: item.public_id,
+    secureUrl: item.secure_url,
+    thumbnailUrl: item.thumbnail_url || null,
+    duration: item.duration || null,
+    bytes: item.bytes || null,
+    format: item.format || null,
+    createdAt: item.created_at || null,
+  }));
+
+  return res.status(200).json({
+    folder,
+    count: videos.length,
+    nextCursor: cursor,
+    videos,
+  });
+}
+
+async function importCloudinaryHazard(req, res) {
+  const { publicId, secureUrl, type, location, timestamp } = req.body;
+
+  if (!publicId || !secureUrl || !type || !location) {
+    return res
+      .status(400)
+      .json({ message: "publicId, secureUrl, type and location are required" });
+  }
+
+  const normalizedType = normalizeHazardType(type);
+
+  const existingHazard = await Hazard.findOne({
+    $or: [{ evidencePublicId: String(publicId).trim() }, { evidenceUrl: String(secureUrl).trim() }],
+  });
+
+  if (existingHazard) {
+    return res.status(409).json({
+      message: "This Cloudinary video is already imported",
+      hazard: existingHazard,
+    });
+  }
+
+  const hazard = await Hazard.create({
+    type: normalizedType,
+    evidenceUrl: String(secureUrl).trim(),
+    evidenceProvider: "cloudinary",
+    evidencePublicId: String(publicId).trim(),
+    source: "cloudinary-folder",
+    location,
+    timestamp: timestamp || new Date(),
+  });
+
+  return res.status(201).json({
+    message: "Cloudinary video imported as hazard",
+    hazard,
+  });
+}
+
 module.exports = {
   createHazard,
   getHazards,
   routeHazard,
   getAllIssues,
   getAdminDashboard,
+  getCloudinaryHazardVideos,
+  importCloudinaryHazard,
 };

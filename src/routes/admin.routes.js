@@ -6,6 +6,8 @@ const {
   routeHazard,
   getAllIssues,
   getAdminDashboard,
+  getCloudinaryHazardVideos,
+  importCloudinaryHazard,
 } = require("../controllers/admin.controller");
 const { ROLES } = require("../constants/roles");
 
@@ -14,6 +16,8 @@ const router = express.Router();
 router.use(requireAuth, allowRoles(ROLES.ADMIN));
 
 router.get("/dashboard", getAdminDashboard);
+router.get("/cloudinary-videos", getCloudinaryHazardVideos);
+router.post("/import-cloudinary-hazard", importCloudinaryHazard);
 router.post("/hazards", createHazard);
 router.get("/hazards", getHazards);
 router.post("/route-hazard", routeHazard);

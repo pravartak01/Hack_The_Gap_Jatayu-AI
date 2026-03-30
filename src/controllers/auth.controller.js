@@ -5,6 +5,20 @@ const PendingSignup = require("../models/PendingSignup");
 const { ROLES } = require("../constants/roles");
 const { sendOtpEmail } = require("../utils/mailer");
 
+function getCookieOptions() {
+  const maxAgeMs = Number(process.env.JWT_COOKIE_MAX_AGE_MS || 7 * 24 * 60 * 60 * 1000);
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: maxAgeMs,
+  };
+}
+
+function attachAuthCookie(res, token) {
+  res.cookie("authToken", token, getCookieOptions());
+}
+
 function buildToken(user) {
   return jwt.sign(
     {
@@ -136,6 +150,7 @@ async function verifySignupOtp(req, res) {
   await PendingSignup.deleteOne({ _id: pending._id });
 
   const token = buildToken(user);
+  attachAuthCookie(res, token);
 
   return res.status(201).json({
     message: "OTP verified. Signup completed successfully",
@@ -170,6 +185,7 @@ async function login(req, res) {
   }
 
   const token = buildToken(user);
+  attachAuthCookie(res, token);
 
   return res.status(200).json({
     message: "Login successful",
@@ -184,4 +200,14 @@ async function login(req, res) {
   });
 }
 
-module.exports = { signup, verifySignupOtp, login };
+async function logout(req, res) {
+  res.clearCookie("authToken", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  });
+
+  return res.status(200).json({ message: "Logout successful" });
+}
+
+module.exports = { signup, verifySignupOtp, login, logout };

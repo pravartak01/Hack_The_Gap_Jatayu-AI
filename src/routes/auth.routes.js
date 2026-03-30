@@ -1,11 +1,12 @@
 const express = require("express");
-const { signup, login, verifySignupOtp } = require("../controllers/auth.controller");
+const { signup, login, verifySignupOtp, logout } = require("../controllers/auth.controller");
 
 const router = express.Router();
 
 router.post("/signup", signup);
 router.post("/verify-otp", verifySignupOtp);
 router.post("/login", login);
+router.post("/logout", logout);
 
 router.post("/admin/signup", (req, res, next) => {
   req.params.role = "ADMIN";

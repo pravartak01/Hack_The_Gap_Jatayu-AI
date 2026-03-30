@@ -30,6 +30,10 @@ Optional extension:
    - SMTP_PORT=587
    - SMTP_USER=your_smtp_user
    - SMTP_PASS=your_smtp_password
+   - CLOUDINARY_CLOUD_NAME=your_cloud_name
+   - CLOUDINARY_API_KEY=your_api_key
+   - CLOUDINARY_API_SECRET=your_api_secret
+   - CLOUDINARY_HAZARD_FOLDER=hazards
 
 3. Run server
 - npm run dev
@@ -263,6 +267,44 @@ Example body:
 
 ### GET /admin/hazards or GET /hazards
 Returns all hazards (latest first).
+
+### GET /admin/cloudinary-videos
+Fetches videos from Cloudinary folder so admin can review in dashboard before categorizing.
+
+Query params (optional):
+- folder: string (default from CLOUDINARY_HAZARD_FOLDER)
+- maxResults: number (default 30, max 100)
+- nextCursor: string (for pagination)
+
+Response fields:
+- folder
+- count
+- nextCursor
+- videos[] with:
+  - publicId
+  - secureUrl
+  - thumbnailUrl
+  - duration
+  - bytes
+  - format
+  - createdAt
+
+### POST /admin/import-cloudinary-hazard
+Admin selects one Cloudinary video and categorizes it as a hazard.
+
+Body:
+{
+   "publicId": "hazards/fire_clip_001",
+   "secureUrl": "https://res.cloudinary.com/.../video/upload/...mp4",
+   "type": "fire",
+   "location": {
+      "address": "Sector 21",
+      "coordinates": { "lat": 28.6139, "lng": 77.2090 }
+   },
+   "timestamp": "2026-03-30T12:30:00.000Z"
+}
+
+After this import, call /admin/route-hazard with returned hazard id to send it to department.
 
 ### POST /admin/route-hazard or POST /route-hazard
 Routes a hazard and creates an issue ticket.
