@@ -1,0 +1,44 @@
+model:
+  backend: yolo8         # yolo8 | detr
+  model_id: yolov8n.pt
+  device: auto
+
+detection:
+  confidence_threshold: 0.25
+  inference_size: 832
+  enable_color_fire_fallback: true
+  color_fire_min_area: 900
+  enable_color_smoke_fallback: true
+  color_smoke_min_area: 1400
+  enable_vehicle_accident_fallback: true
+  enable_pre_collision_detection: true
+  pre_collision_distance_ratio: 1.55
+  pre_collision_min_closing_px: 8.0
+  hazard_classes:
+  - fire
+  - smoke
+  - flame
+  - hazard
+  - explosion
+  - gas leak
+  - chemical spill
+  - electrical fire
+  - accident
+
+webcam:
+  source: 0
+  event_exit_grace_frames: 12
+  event_clip_fps: 8.0
+
+video:
+  frame_skip: 1
+
+output:
+  save_directory: detections/hazard_detections
+
+cloudinary:
+  enabled: true
+  cloud_name: dfxa8tae7
+  api_key: "714935831216528"
+  api_secret: "KjFmIWnH3K7jpJTJjQmtOci0w0s"
+  folder: hazard-clips

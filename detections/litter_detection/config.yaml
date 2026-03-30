@@ -1,0 +1,60 @@
+model:
+  backend: yolo8
+  model_id: yolov8n.pt
+  device: auto
+
+detection:
+  confidence_threshold: 0.25
+  person_confidence_threshold: 0.25
+  trash_confidence_threshold: 0.12
+  inference_size: 832
+  person_class: person
+  trash_classes:
+  - bottle
+  - cup
+  - wine glass
+  - bowl
+  - banana
+  - apple
+  - orange
+  - sandwich
+  - hot dog
+  - pizza
+  - donut
+  - cake
+  - backpack
+  - handbag
+  - suitcase
+  - tie
+
+tracking:
+  iou_threshold: 0.25
+  max_age_frames: 20
+
+event:
+  proximity_px: 120
+  min_near_frames: 4
+  stationary_movement_px: 12
+  min_stationary_frames: 10
+  away_distance_px: 170
+  max_drop_window_frames: 180
+  event_exit_grace_frames: 12
+  event_clip_fps: 10.0
+
+webcam:
+  source: 0
+
+video:
+  frame_skip: 1
+  preview: true
+
+output:
+  save_directory: detections/litter_detection
+  save_full_annotated_video: true
+
+cloudinary:
+  enabled: true
+  cloud_name: dfxa8tae7
+  api_key: "714935831216528"
+  api_secret: "KjFmIWnH3K7jpJTJjQmtOci0w0s"
+  folder: garbage-clips

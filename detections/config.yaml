@@ -1,0 +1,80 @@
+detection:
+  alert_banner: true
+  confidence_threshold: 0.35
+  mode: all
+  weapon_classes:
+  - weapon
+  - knife
+  - scissors
+  - baseball bat
+  - gun
+  - handgun
+  - long gun
+  - machine gun
+  - smg
+  - assault rifle
+  - sniper
+  - carbine
+  - ak47
+  - ar15
+  - pistol
+  - rifle
+  - shotgun
+  - firearm
+  - revolver
+  - sword
+  - dagger
+  - machete
+  - axe
+  - grenade
+  - spear
+  - bow
+  - arrow
+  - crossbow
+  - taser
+model:
+  device: auto
+  name: m
+  weights_path: null
+output:
+  save_detections: true
+  save_directory: detections
+  save_format: jpg
+performance:
+  batch_size: 1
+  num_threads: 4
+validation:
+  datasets: []
+  enabled: false
+video:
+  confidence_threshold: 0.2
+  frame_skip: 1
+  output_format: mp4
+webcam:
+  source: 0
+  confidence_threshold: 0.2
+  process_every_n_frames: 2
+  event_exit_grace_frames: 12
+  event_clip_fps: 8.0
+  save_output: true
+inference:
+  image_size: 960
+  video_size: 832
+  webcam_size: 832
+  use_tta: false
+alerting:
+  enabled: true
+  webhook_url: http://127.0.0.1:5001/alerts
+  cooldown_seconds: 0
+  source_name: webcam-dev
+streaming:
+  enabled: true
+  frame_url: http://127.0.0.1:5001/frame
+  fps: 8
+  jpeg_quality: 75
+cloudinary:
+  enabled: true
+  cloud_name: "dfxa8tae7"
+  api_key: "714935831216528"
+  api_secret: "KjFmIWnH3K7jpJTJjQmtOci0w0s"
+  folder: weapon-detection-clips
