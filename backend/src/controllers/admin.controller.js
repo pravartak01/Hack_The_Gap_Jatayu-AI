@@ -397,6 +397,114 @@ async function getCloudinaryHazardVideosByType(req, res) {
   }
 }
 
+async function getHazardVideosFire(req, res) {
+  const maxResults = Number(req.query.maxResults || 30);
+  const nextCursor = req.query.nextCursor ? String(req.query.nextCursor) : undefined;
+
+  try {
+    const { resources, nextCursor: cursor } = await fetchHazardVideosByType({
+      hazardType: "fire",
+      maxResults,
+      nextCursor,
+    });
+
+    const videos = resources.map((item) => ({
+      publicId: item.public_id,
+      secureUrl: item.secure_url,
+      thumbnailUrl: item.thumbnail_url || null,
+      duration: item.duration || null,
+      bytes: item.bytes || null,
+      format: item.format || null,
+      createdAt: item.created_at || null,
+    }));
+
+    return res.status(200).json({
+      hazardType: "fire",
+      folder: "hazard-clips",
+      count: videos.length,
+      nextCursor: cursor,
+      videos,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch fire hazard videos",
+      error: error.message,
+    });
+  }
+}
+
+async function getHazardVideosWeapon(req, res) {
+  const maxResults = Number(req.query.maxResults || 30);
+  const nextCursor = req.query.nextCursor ? String(req.query.nextCursor) : undefined;
+
+  try {
+    const { resources, nextCursor: cursor } = await fetchHazardVideosByType({
+      hazardType: "gun",
+      maxResults,
+      nextCursor,
+    });
+
+    const videos = resources.map((item) => ({
+      publicId: item.public_id,
+      secureUrl: item.secure_url,
+      thumbnailUrl: item.thumbnail_url || null,
+      duration: item.duration || null,
+      bytes: item.bytes || null,
+      format: item.format || null,
+      createdAt: item.created_at || null,
+    }));
+
+    return res.status(200).json({
+      hazardType: "weapon-detection",
+      folder: "weapon-detection-clips",
+      count: videos.length,
+      nextCursor: cursor,
+      videos,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch weapon detection videos",
+      error: error.message,
+    });
+  }
+}
+
+async function getHazardVideosGarbage(req, res) {
+  const maxResults = Number(req.query.maxResults || 30);
+  const nextCursor = req.query.nextCursor ? String(req.query.nextCursor) : undefined;
+
+  try {
+    const { resources, nextCursor: cursor } = await fetchHazardVideosByType({
+      hazardType: "garbage dumping",
+      maxResults,
+      nextCursor,
+    });
+
+    const videos = resources.map((item) => ({
+      publicId: item.public_id,
+      secureUrl: item.secure_url,
+      thumbnailUrl: item.thumbnail_url || null,
+      duration: item.duration || null,
+      bytes: item.bytes || null,
+      format: item.format || null,
+      createdAt: item.created_at || null,
+    }));
+
+    return res.status(200).json({
+      hazardType: "garbage",
+      folder: "garbage-clips",
+      count: videos.length,
+      nextCursor: cursor,
+      videos,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch garbage disposal videos",
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   createHazard,
   getHazards,
@@ -405,6 +513,9 @@ module.exports = {
   getAdminDashboard,
   getCloudinaryHazardVideos,
   getCloudinaryHazardVideosByType,
+  getHazardVideosFire,
+  getHazardVideosWeapon,
+  getHazardVideosGarbage,
   importCloudinaryHazard,
   getAllComplaints,
   getPendingComplaints,

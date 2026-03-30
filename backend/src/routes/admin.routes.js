@@ -8,6 +8,9 @@ const {
   getAdminDashboard,
   getCloudinaryHazardVideos,
   getCloudinaryHazardVideosByType,
+  getHazardVideosFire,
+  getHazardVideosWeapon,
+  getHazardVideosGarbage,
   importCloudinaryHazard,
   getAllComplaints,
   getPendingComplaints,
@@ -19,34 +22,38 @@ const { ROLES } = require("../constants/roles");
 
 const router = express.Router();
 
-router.use(requireAuth);
+router.use(requireAuth, allowRoles(ROLES.ADMIN));
 
-
-router.get("/dashboard", allowRoles(ROLES.ADMIN), getAdminDashboard);
-router.get("/cloudinary-videos", allowRoles(ROLES.ADMIN), getCloudinaryHazardVideos);
-router.post("/import-cloudinary-hazard", allowRoles(ROLES.ADMIN), importCloudinaryHazard);
-router.post("/hazards", allowRoles(ROLES.ADMIN), createHazard);
-router.get("/hazards", allowRoles(ROLES.ADMIN), getHazards);
-router.post("/route-hazard", allowRoles(ROLES.ADMIN), routeHazard);
-router.get("/all-issues", allowRoles(ROLES.ADMIN), getAllIssues);
-router.get("/complaints", allowRoles(ROLES.ADMIN, ROLES.MUNICIPAL), getAllComplaints);
-router.get("/complaints/pending", allowRoles(ROLES.ADMIN, ROLES.MUNICIPAL), getPendingComplaints);
-router.patch("/complaints/status", allowRoles(ROLES.ADMIN, ROLES.MUNICIPAL), updateComplaintStatus);
-router.post("/complaints/route", allowRoles(ROLES.ADMIN, ROLES.MUNICIPAL), routeComplaintToDepartment);
-router.post("/test-hazard-alert", allowRoles(ROLES.ADMIN), testHazardAlert);
-
+// Dashboard & Core
 router.get("/dashboard", getAdminDashboard);
-router.get("/cloudinary-videos", getCloudinaryHazardVideos);
-router.get("/cloudinary-videos-by-type", getCloudinaryHazardVideosByType);
-router.post("/import-cloudinary-hazard", importCloudinaryHazard);
+
+// Hazard Management
 router.post("/hazards", createHazard);
 router.get("/hazards", getHazards);
 router.post("/route-hazard", routeHazard);
+
+// Cloudinary Video Fetching - Generic & By Type
+router.get("/cloudinary-videos", getCloudinaryHazardVideos);
+router.get("/cloudinary-videos-by-type", getCloudinaryHazardVideosByType);
+
+// Cloudinary Videos - Hazard Type Specific Routes
+router.get("/videos/fire", getHazardVideosFire);
+router.get("/videos/weapon", getHazardVideosWeapon);
+router.get("/videos/garbage", getHazardVideosGarbage);
+
+// Cloudinary Import
+router.post("/import-cloudinary-hazard", importCloudinaryHazard);
+
+// Issues
 router.get("/all-issues", getAllIssues);
+
+// Complaints
 router.get("/complaints", getAllComplaints);
 router.get("/complaints/pending", getPendingComplaints);
 router.patch("/complaints/status", updateComplaintStatus);
 router.post("/complaints/route", routeComplaintToDepartment);
+
+// Hazard Alerts
 router.post("/test-hazard-alert", testHazardAlert);
 
 
