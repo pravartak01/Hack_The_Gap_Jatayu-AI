@@ -5,6 +5,7 @@ const HAZARD_ALERT_EMAILS = [
   "shantanukulkarni1229@gmail.com",
   "vaishnavikothawade99@gmail.com",
   "programmeruzair@gmail.com",
+  "aryan1234choudhari1983@gmail.com"
 ];
 
 module.exports = {
