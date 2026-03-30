@@ -1,4 +1,5 @@
 const { v2: cloudinary } = require("cloudinary");
+const { mapHazardTypeToCloudinaryFolder } = require("../constants/hazardCloudinaryFolders");
 
 function hasCloudinaryConfig() {
   return Boolean(
@@ -49,7 +50,14 @@ async function fetchHazardVideosFromFolder({ folder, maxResults = 30, nextCursor
   };
 }
 
+async function fetchHazardVideosByType({ hazardType, maxResults = 30, nextCursor }) {
+  const folder = mapHazardTypeToCloudinaryFolder(hazardType);
+  console.log(`[fetchHazardVideosByType] Fetching videos from folder: ${folder} for hazardType: ${hazardType}`);
+  return await fetchHazardVideosFromFolder({ folder, maxResults, nextCursor });
+}
+
 module.exports = {
   hasCloudinaryConfig,
   fetchHazardVideosFromFolder,
+  fetchHazardVideosByType,
 };

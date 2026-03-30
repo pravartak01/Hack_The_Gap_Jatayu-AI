@@ -1,4 +1,5 @@
 const { v2: cloudinary } = require("cloudinary");
+const { mapHazardTypeToCloudinaryFolder } = require("../constants/hazardCloudinaryFolders");
 
 function hasCloudinaryConfig() {
   return Boolean(
@@ -23,7 +24,7 @@ function configureCloudinary() {
 }
 
 async function uploadToCloudinary(fileBuffer, fileName, resourceType = "auto", folder = "complaints") {
-  console.log(`[uploadToCloudinary] Starting upload: fileName=${fileName}, resourceType=${resourceType}`);
+  console.log(`[uploadToCloudinary] Starting upload: fileName=${fileName}, resourceType=${resourceType}, folder=${folder}`);
   const isConfigured = configureCloudinary();
   if (!isConfigured) {
     const error = new Error("Cloudinary is not configured");
@@ -61,8 +62,21 @@ async function uploadComplaintMedia(fileBuffer, fileName, resourceType = "auto")
   };
 }
 
+async function uploadHazardMedia(fileBuffer, fileName, hazardType, resourceType = "auto") {
+  const folder = mapHazardTypeToCloudinaryFolder(hazardType);
+  console.log(`[uploadHazardMedia] Uploading to folder: ${folder} for hazardType: ${hazardType}`);
+  const result = await uploadToCloudinary(fileBuffer, fileName, resourceType, folder);
+  return {
+    url: result.secure_url,
+    publicId: result.public_id,
+    type: resourceType === "video" ? "video" : "image",
+    folder: folder,
+  };
+}
+
 module.exports = {
   hasCloudinaryConfig,
   uploadToCloudinary,
   uploadComplaintMedia,
+  uploadHazardMedia,
 };
