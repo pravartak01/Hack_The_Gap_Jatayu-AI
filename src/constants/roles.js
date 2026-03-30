@@ -1,0 +1,10 @@
+const ROLES = {
+  ADMIN: "ADMIN",
+  FIRE: "FIRE",
+  POLICE: "POLICE",
+  TRAFFIC: "TRAFFIC",
+  MUNICIPAL: "MUNICIPAL",
+  CITIZEN: "CITIZEN"
+};
+
+module.exports = { ROLES };
