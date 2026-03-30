@@ -100,6 +100,19 @@ export const api = {
     return request('/admin/all-issues', { token });
   },
 
+  getCloudinaryHazardVideos(token, { folder, maxResults, nextCursor } = {}) {
+    const params = new URLSearchParams();
+
+    if (folder) params.set('folder', folder);
+    if (maxResults) params.set('maxResults', String(maxResults));
+    if (nextCursor) params.set('nextCursor', nextCursor);
+
+    const query = params.toString();
+    const path = `/admin/cloudinary-videos${query ? `?${query}` : ''}`;
+
+    return request(path, { token });
+  },
+
   getAssignedIssues(token, role) {
     const roleLower = toLowerRole(role);
     return request(`/${roleLower}/assigned-issues`, { token });

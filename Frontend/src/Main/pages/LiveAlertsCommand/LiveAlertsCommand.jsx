@@ -1,82 +1,46 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
+import { api } from '../../../lib/api'
+import { getSession } from '../../../lib/session'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 const DEPARTMENTS = ['Police', 'Fire', 'Municipal', 'Traffic', 'Admin']
 
-const CAMERA_FEEDS = [
-  {
-    id: 'cam-01',
-    name: 'Gate 1 – East Entry',
-    location: 'East perimeter gate, Block A',
-    detectedAgo: '32s ago',
-    detectedMs: 32000,
-    severity: 'High',
-    channel: 'CH-07',
-    threat: 'Firearm detected',
-    confidence: 94,
-    zone: 'Zone A',
-  },
-  {
-    id: 'cam-02',
-    name: 'Parking Zone – Level 2',
-    location: 'Multi-level parking, Zone B',
-    detectedAgo: '1m ago',
-    detectedMs: 60000,
-    severity: 'Medium',
-    channel: 'CH-12',
-    threat: 'Bladed object',
-    confidence: 76,
-    zone: 'Zone B',
-  },
-  {
-    id: 'cam-03',
-    name: 'Service Road – North',
-    location: 'Service lane, North compound',
-    detectedAgo: '2m ago',
-    detectedMs: 120000,
-    severity: 'High',
-    channel: 'CH-03',
-    threat: 'Firearm detected',
-    confidence: 91,
-    zone: 'Zone C',
-  },
-  {
-    id: 'cam-04',
-    name: 'Lobby – Main Reception',
-    location: 'Administrative block, ground floor',
-    detectedAgo: '3m ago',
-    detectedMs: 180000,
-    severity: 'Low',
-    channel: 'CH-18',
-    threat: 'Suspicious object',
-    confidence: 58,
-    zone: 'Zone A',
-  },
-  {
-    id: 'cam-05',
-    name: 'Bus Stand – Front',
-    location: 'Public transport bay, front side',
-    detectedAgo: '4m ago',
-    detectedMs: 240000,
-    severity: 'Medium',
-    channel: 'CH-22',
-    threat: 'Crowd anomaly',
-    confidence: 82,
-    zone: 'Zone D',
-  },
-  {
-    id: 'cam-06',
-    name: 'Warehouse – Bay 3',
-    location: 'Logistics yard, Bay 3',
-    detectedAgo: '5m ago',
-    detectedMs: 300000,
-    severity: 'High',
-    channel: 'CH-31',
-    threat: 'Firearm detected',
-    confidence: 88,
-    zone: 'Zone E',
-  },
-]
+// ─── Helpers for time/severity mapping ───────────────────────────────────────
+function formatDetectedAgo(detectedMs) {
+  if (!Number.isFinite(detectedMs) || detectedMs < 0) return 'Just now'
+  const seconds = Math.floor(detectedMs / 1000)
+  if (seconds < 60) return `${seconds || 1}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ago`
+}
+
+function mapVideoToFeed(video, index) {
+  const createdAt = video.createdAt ? new Date(video.createdAt) : new Date()
+  const detectedMs = Date.now() - createdAt.getTime()
+
+  let severity = 'Medium'
+  if (video.duration && video.duration > 180) severity = 'High'
+  else if (video.duration && video.duration < 60) severity = 'Low'
+
+  const baseName = String(video.publicId || '').split('/').pop() || 'Hazard clip'
+
+  return {
+    id: video.publicId || `clip-${index}`,
+    name: baseName.replace(/[_-]+/g, ' '),
+    location: video.folder || 'Unmapped camera zone',
+    detectedAgo: formatDetectedAgo(detectedMs),
+    detectedMs,
+    severity,
+    channel: `CH-${String((index % 32) + 1).padStart(2, '0')}`,
+    threat: 'Potential hazard detected',
+    confidence: 80,
+    zone: `Zone ${String.fromCharCode(65 + (index % 5))}`,
+    secureUrl: video.secureUrl,
+    thumbnailUrl: video.thumbnailUrl,
+  }
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const severityConfig = {
@@ -188,11 +152,20 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign }) => {
 
       {/* Camera viewport */}
       <div className="lac-viewport">
-        {/* Simulated CRT noise */}
-        <div className="lac-noise" />
-        {/* Fake feed texture */}
-        <div className="lac-feed-bg" />
-        {/* Scanning animation */}
+        {/* Video feed / thumbnail */}
+        {feed.secureUrl ? (
+          <video
+            className="lac-video"
+            src={feed.secureUrl}
+            muted
+            loop
+            autoPlay
+            playsInline
+          />
+        ) : (
+          <div className="lac-noise" />
+        )}
+        {/* Scanning animation overlay */}
         <ScanOverlay color={cfg.scan} />
         {/* Timestamp */}
         <div className="lac-timestamp">
@@ -203,7 +176,7 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign }) => {
           <span className="lac-live-dot" />
           LIVE
         </div>
-        {/* Threat detection box (simulated) */}
+        {/* Threat detection box */}
         <div className="lac-threat-box" style={{ borderColor: cfg.pulse, boxShadow: `0 0 0 1px ${cfg.pulse}40` }}>
           <span className="lac-threat-label" style={{ background: cfg.pulse }}>TARGET</span>
         </div>
@@ -312,8 +285,18 @@ const FullscreenModal = ({ feed, onClose }) => {
 
         {/* Viewport */}
         <div className="lac-modal-viewport">
-          <div className="lac-noise" />
-          <div className="lac-feed-bg" />
+          {feed.secureUrl ? (
+            <video
+              className="lac-video-full"
+              src={feed.secureUrl}
+              controls
+              autoPlay
+              muted
+              playsInline
+            />
+          ) : (
+            <div className="lac-noise" />
+          )}
           <ScanOverlay color={cfg.scan} />
           <div className="lac-threat-box lac-threat-box-lg" style={{ borderColor: cfg.pulse, boxShadow: `0 0 0 1px ${cfg.pulse}40` }}>
             <span className="lac-threat-label" style={{ background: cfg.pulse }}>TARGET ACQUIRED</span>
@@ -363,29 +346,27 @@ const FullscreenModal = ({ feed, onClose }) => {
 
 // ─── Stats bar ────────────────────────────────────────────────────────────────
 const StatsBar = () => {
-  const high = CAMERA_FEEDS.filter(f => f.severity === 'High').length
-  const med  = CAMERA_FEEDS.filter(f => f.severity === 'Medium').length
-  const low  = CAMERA_FEEDS.filter(f => f.severity === 'Low').length
+  const [stats] = useState({ high: 0, med: 0, low: 0, total: 0 })
 
   return (
     <div className="lac-statsbar">
       <div className="lac-stat-item">
-        <span className="lac-stat-num lac-stat-high">{high}</span>
+        <span className="lac-stat-num lac-stat-high">{stats.high}</span>
         <span className="lac-stat-lbl">Critical</span>
       </div>
       <div className="lac-stat-divider" />
       <div className="lac-stat-item">
-        <span className="lac-stat-num lac-stat-med">{med}</span>
+        <span className="lac-stat-num lac-stat-med">{stats.med}</span>
         <span className="lac-stat-lbl">Moderate</span>
       </div>
       <div className="lac-stat-divider" />
       <div className="lac-stat-item">
-        <span className="lac-stat-num lac-stat-low">{low}</span>
+        <span className="lac-stat-num lac-stat-low">{stats.low}</span>
         <span className="lac-stat-lbl">Advisory</span>
       </div>
       <div className="lac-stat-divider" />
       <div className="lac-stat-item">
-        <span className="lac-stat-num">{CAMERA_FEEDS.length}</span>
+        <span className="lac-stat-num">{stats.total}</span>
         <span className="lac-stat-lbl">Total Feeds</span>
       </div>
       <div className="lac-statsbar-live">
@@ -401,13 +382,50 @@ export default function LiveAlertsCommand() {
   const [fullscreenFeed, setFullscreenFeed] = useState(null)
   const [assignedTo, setAssignedTo]         = useState({})
   const [filterSeverity, setFilterSeverity] = useState('All')
+  const [feeds, setFeeds]                   = useState([])
+  const [loading, setLoading]               = useState(false)
+  const [error, setError]                   = useState(null)
+
+  useEffect(() => {
+    const session = getSession()
+    if (!session?.token || !session?.user?.role) return
+
+    const { token, user } = session
+    if (String(user.role).toUpperCase() !== 'ADMIN') return
+
+    let cancelled = false
+
+    const fetchOnce = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const data = await api.getCloudinaryHazardVideos(token)
+        const nextFeeds = (data.videos || []).map((v, idx) => mapVideoToFeed({ ...v, folder: data.folder }, idx))
+        if (!cancelled) {
+          setFeeds(nextFeeds)
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Failed to load live alerts')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    fetchOnce()
+    const intervalId = setInterval(fetchOnce, 15000)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [])
 
   const handleAssign = (feedId, dept) =>
     setAssignedTo(prev => ({ ...prev, [feedId]: dept }))
 
   const filtered = filterSeverity === 'All'
-    ? CAMERA_FEEDS
-    : CAMERA_FEEDS.filter(f => f.severity === filterSeverity)
+    ? feeds
+    : feeds.filter(f => f.severity === filterSeverity)
 
   return (
     <>
@@ -445,6 +463,15 @@ export default function LiveAlertsCommand() {
 
         {/* ── Grid ────────────────────────────────── */}
         <div className="lac-grid">
+          {loading && feeds.length === 0 && (
+            <div className="lac-empty">Fetching live alerts from Cloudinary…</div>
+          )}
+          {error && !loading && feeds.length === 0 && (
+            <div className="lac-empty">{error}</div>
+          )}
+          {!loading && !error && filtered.length === 0 && (
+            <div className="lac-empty">No live alerts available.</div>
+          )}
           {filtered.map((feed, i) => (
             <FeedCard
               key={feed.id}
@@ -874,24 +901,41 @@ const CSS = `
     position: absolute;
     inset: -10%;
     width: 120%;
-    height: 120%;
+    background: #020617;
     opacity: 0.035;
     pointer-events: none;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     background-size: 150px 150px;
     z-index: 1;
     animation: lac-noise-anim 0.15s steps(1) infinite;
+  
+  .lac-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
   }
 
   /* Simulated CCTV feed background */
   .lac-feed-bg {
-    position: absolute;
+    background: #020617;
     inset: 0;
     background:
       linear-gradient(180deg, rgba(30,40,60,0.3) 0%, rgba(10,15,25,0.6) 100%),
       repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,255,120,0.015) 3px, rgba(0,255,120,0.015) 4px);
     z-index: 0;
     animation: lac-grid-flicker 4s ease-in-out infinite;
+  
+  .lac-video-full {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #000;
+  }
   }
 
   /* ── SCAN OVERLAY ────────────────────────────── */
