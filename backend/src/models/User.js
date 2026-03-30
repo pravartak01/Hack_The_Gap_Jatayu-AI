@@ -30,7 +30,28 @@ const userSchema = new mongoose.Schema(
         required: true,
         unique: true,
         trim: true,
-    }
+    },
+    locations: [
+      {
+        latitude: {
+          type: Number,
+          required: true,
+        },
+        longitude: {
+          type: Number,
+          required: true,
+        },
+        label: {
+          type: String,
+          trim: true,
+          default: null,
+        },
+        recordedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   { timestamps: true }
 );

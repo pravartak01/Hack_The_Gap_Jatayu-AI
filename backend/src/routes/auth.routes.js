@@ -1,5 +1,7 @@
 const express = require("express");
 const { signup, login, verifySignupOtp, logout } = require("../controllers/auth.controller");
+const { pushLocation, getLatestLocation, getAllLocations } = require("../controllers/location.controller");
+const { requireAuth } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
 
@@ -7,6 +9,9 @@ router.post("/signup", signup);
 router.post("/verify-otp", verifySignupOtp);
 router.post("/login", login);
 router.post("/logout", logout);
+router.post("/location", requireAuth, pushLocation);
+router.get("/location/latest", requireAuth, getLatestLocation);
+router.get("/locations", requireAuth, getAllLocations);
 
 router.post("/admin/signup", (req, res, next) => {
   req.params.role = "ADMIN";
