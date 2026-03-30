@@ -4,7 +4,7 @@ const ActivityLog = require("../models/ActivityLog");
 const Complaint = require("../models/Complaint");
 const { mapHazardToDepartment, normalizeHazardType } = require("../constants/hazardRouting");
 const { generateIssueId } = require("../utils/issueId");
-const { fetchHazardVideosFromFolder } = require("../utils/cloudinary");
+const { fetchHazardVideosFromFolder, fetchHazardVideosByType } = require("../utils/cloudinary");
 const { sendHazardAlertEmail } = require("../utils/mailer");
 const { HAZARD_ALERT_EMAILS } = require("../constants/alertEmails");
 
@@ -357,6 +357,46 @@ async function testHazardAlert(req, res) {
   }
 }
 
+async function getCloudinaryHazardVideosByType(req, res) {
+  const { hazardType } = req.query;
+  const maxResults = Number(req.query.maxResults || 30);
+  const nextCursor = req.query.nextCursor ? String(req.query.nextCursor) : undefined;
+
+  if (!hazardType) {
+    return res.status(400).json({ message: "hazardType query parameter is required" });
+  }
+
+  try {
+    const { resources, nextCursor: cursor } = await fetchHazardVideosByType({
+      hazardType: String(hazardType).trim(),
+      maxResults,
+      nextCursor,
+    });
+
+    const videos = resources.map((item) => ({
+      publicId: item.public_id,
+      secureUrl: item.secure_url,
+      thumbnailUrl: item.thumbnail_url || null,
+      duration: item.duration || null,
+      bytes: item.bytes || null,
+      format: item.format || null,
+      createdAt: item.created_at || null,
+    }));
+
+    return res.status(200).json({
+      hazardType: String(hazardType).trim(),
+      count: videos.length,
+      nextCursor: cursor,
+      videos,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch hazard videos by type",
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   createHazard,
   getHazards,
@@ -364,6 +404,7 @@ module.exports = {
   getAllIssues,
   getAdminDashboard,
   getCloudinaryHazardVideos,
+  getCloudinaryHazardVideosByType,
   importCloudinaryHazard,
   getAllComplaints,
   getPendingComplaints,

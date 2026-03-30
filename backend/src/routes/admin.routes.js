@@ -7,6 +7,7 @@ const {
   getAllIssues,
   getAdminDashboard,
   getCloudinaryHazardVideos,
+  getCloudinaryHazardVideosByType,
   importCloudinaryHazard,
   getAllComplaints,
   getPendingComplaints,
@@ -22,6 +23,7 @@ router.use(requireAuth, allowRoles(ROLES.ADMIN));
 
 router.get("/dashboard", getAdminDashboard);
 router.get("/cloudinary-videos", getCloudinaryHazardVideos);
+router.get("/cloudinary-videos-by-type", getCloudinaryHazardVideosByType);
 router.post("/import-cloudinary-hazard", importCloudinaryHazard);
 router.post("/hazards", createHazard);
 router.get("/hazards", getHazards);
