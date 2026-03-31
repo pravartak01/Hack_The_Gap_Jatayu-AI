@@ -1,37 +1,12 @@
 import React, { useMemo, useState } from 'react'
-import { Building2, Users, UserPlus, Briefcase, Phone, Shield } from 'lucide-react'
+import { Building2, Users, UserPlus, Briefcase, Phone, Shield, Search, Clock3 } from 'lucide-react'
 
 const INITIAL_DEPARTMENTS = [
-  {
-    id: 'police',
-    name: 'Police',
-    code: 'POL',
-    primaryContact: 'Control room',
-  },
-  {
-    id: 'fire',
-    name: 'Fire & Rescue',
-    code: 'FIR',
-    primaryContact: 'Fire station central desk',
-  },
-  {
-    id: 'municipal',
-    name: 'Municipal',
-    code: 'MUN',
-    primaryContact: 'Sanitation supervisor',
-  },
-  {
-    id: 'traffic',
-    name: 'Traffic',
-    code: 'TRF',
-    primaryContact: 'Traffic control room',
-  },
-  {
-    id: 'admin',
-    name: 'Admin',
-    code: 'ADM',
-    primaryContact: 'Command centre admin',
-  },
+  { id: 'police', name: 'Police', code: 'POL', primaryContact: 'Control room' },
+  { id: 'fire', name: 'Fire & Rescue', code: 'FIR', primaryContact: 'Fire station central desk' },
+  { id: 'municipal', name: 'Municipal', code: 'MUN', primaryContact: 'Sanitation supervisor' },
+  { id: 'traffic', name: 'Traffic', code: 'TRF', primaryContact: 'Traffic control room' },
+  { id: 'admin', name: 'Admin', code: 'ADM', primaryContact: 'Command centre admin' },
 ]
 
 const INITIAL_EMPLOYEES = [
@@ -57,14 +32,31 @@ const INITIAL_EMPLOYEES = [
     departmentId: 'municipal',
     role: 'Ward sanitation officer',
     shift: 'Rotational',
-    status: 'Active',
+    status: 'On leave',
   },
 ]
+
+function statusTone(status) {
+  if (status === 'Active') return 'dp-status-active'
+  if (status === 'On leave') return 'dp-status-leave'
+  return 'dp-status-inactive'
+}
+
+function metricCard(icon, label, value, tone) {
+  return {
+    icon,
+    label,
+    value,
+    tone,
+  }
+}
 
 export default function DepartmentPanel() {
   const [departments, setDepartments] = useState(INITIAL_DEPARTMENTS)
   const [employees, setEmployees] = useState(INITIAL_EMPLOYEES)
+
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('all')
+  const [employeeSearch, setEmployeeSearch] = useState('')
 
   const [newDepartment, setNewDepartment] = useState({
     name: '',
@@ -81,21 +73,47 @@ export default function DepartmentPanel() {
   })
 
   const totals = useMemo(() => {
-    return departments.reduce(
-      (accumulator, department) => {
-        const count = employees.filter((employee) => employee.departmentId === department.id).length
-        accumulator.totalEmployees += count
-        accumulator.byDepartment[department.id] = count
-        return accumulator
-      },
-      { totalEmployees: 0, byDepartment: {} },
-    )
+    const byDepartment = departments.reduce((acc, dept) => {
+      acc[dept.id] = employees.filter((emp) => emp.departmentId === dept.id).length
+      return acc
+    }, {})
+
+    const active = employees.filter((employee) => employee.status === 'Active').length
+    const onLeave = employees.filter((employee) => employee.status === 'On leave').length
+
+    return {
+      totalEmployees: employees.length,
+      active,
+      onLeave,
+      byDepartment,
+    }
   }, [departments, employees])
 
   const filteredEmployees = useMemo(() => {
-    if (selectedDepartmentId === 'all') return employees
-    return employees.filter((employee) => employee.departmentId === selectedDepartmentId)
-  }, [employees, selectedDepartmentId])
+    const byDepartment =
+      selectedDepartmentId === 'all'
+        ? employees
+        : employees.filter((employee) => employee.departmentId === selectedDepartmentId)
+
+    const query = employeeSearch.trim().toLowerCase()
+    if (!query) return byDepartment
+
+    return byDepartment.filter((employee) => {
+      const deptName = departments.find((department) => department.id === employee.departmentId)?.name || ''
+      const blob = `${employee.name} ${employee.role} ${employee.shift} ${employee.status} ${deptName}`.toLowerCase()
+      return blob.includes(query)
+    })
+  }, [departments, employeeSearch, employees, selectedDepartmentId])
+
+  const dashboardCards = useMemo(
+    () => [
+      metricCard(<Building2 size={14} />, 'Departments', departments.length, 'dp-metric-indigo'),
+      metricCard(<Users size={14} />, 'Total Employees', totals.totalEmployees, 'dp-metric-sky'),
+      metricCard(<Shield size={14} />, 'Active', totals.active, 'dp-metric-emerald'),
+      metricCard(<Clock3 size={14} />, 'On Leave', totals.onLeave, 'dp-metric-amber'),
+    ],
+    [departments.length, totals.active, totals.onLeave, totals.totalEmployees],
+  )
 
   const handleDepartmentChange = (event) => {
     const { name, value } = event.target
@@ -120,7 +138,7 @@ export default function DepartmentPanel() {
       {
         id,
         name: trimmedName,
-        code: newDepartment.code.trim() || idBase.substring(0, 3).toUpperCase(),
+        code: newDepartment.code.trim().toUpperCase() || idBase.substring(0, 3).toUpperCase(),
         primaryContact: newDepartment.primaryContact.trim() || 'Not set',
       },
     ])
@@ -136,7 +154,7 @@ export default function DepartmentPanel() {
 
     setEmployees((previous) => [
       {
-        id: `emp-${previous.length + 1}`,
+        id: `emp-${String(previous.length + 1).padStart(2, '0')}`,
         name: trimmedName,
         departmentId: newEmployee.departmentId,
         role: trimmedRole,
@@ -150,291 +168,720 @@ export default function DepartmentPanel() {
   }
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">Departments & staff</h2>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-            Admin view for Jatayu AI. Add new departments and keep an up-to-date list of working staff for each
-            section.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-            <Building2 className="h-3 w-3" />
-            {departments.length} departments
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
-            <Users className="h-3 w-3" />
-            {totals.totalEmployees} employees
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-            <Shield className="h-3 w-3" />
-            Admin only
-          </span>
-        </div>
-      </header>
+    <>
+      <style>{PAGE_CSS}</style>
+      <div className="dp-root">
+        <header className="dp-head">
+          <div>
+            <p className="dp-eyebrow">Operations Directory</p>
+            <h2 className="dp-title">Department Panel</h2>
+            <p className="dp-subtitle">
+              Maintain team structure, assign workforce, and keep real-time staffing visibility across all command units.
+            </p>
+          </div>
+          <div className="dp-admin-chip">
+            <Shield size={13} />
+            Admin Controls Enabled
+          </div>
+        </header>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr),minmax(0,1.2fr)]">
-        {/* Departments list */}
-        <section className="space-y-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-            <h3 className="mb-2 text-xs font-semibold text-slate-900 dark:text-slate-50">Departments</h3>
-            <div className="space-y-2">
+        <section className="dp-metrics">
+          {dashboardCards.map((card) => (
+            <article key={card.label} className={`dp-metric ${card.tone}`}>
+              <span className="dp-metric-icon">{card.icon}</span>
+              <div>
+                <div className="dp-metric-value">{card.value}</div>
+                <div className="dp-metric-label">{card.label}</div>
+              </div>
+            </article>
+          ))}
+        </section>
+
+        <section className="dp-main-grid">
+          <div className="dp-panel">
+            <div className="dp-panel-head">
+              <h3>Department Directory</h3>
+              <span>{departments.length} listed</span>
+            </div>
+
+            <div className="dp-department-list">
               {departments.map((department) => (
-                <article
-                  key={department.id}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/50"
-                >
-                  <div className="flex items-start gap-2.5">
-                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-100">
-                      {department.code}
-                    </div>
+                <article key={department.id} className="dp-department-item">
+                  <div className="dp-department-left">
+                    <span className="dp-code-badge">{department.code}</span>
                     <div>
-                      <p className="text-xs font-semibold text-slate-900 dark:text-slate-50">{department.name}</p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">{department.primaryContact}</p>
+                      <p className="dp-department-name">{department.name}</p>
+                      <p className="dp-department-contact">
+                        <Phone size={12} />
+                        {department.primaryContact}
+                      </p>
                     </div>
                   </div>
-                  <div className="text-right text-[11px] text-slate-500 dark:text-slate-400">
-                    <p>Employees: {totals.byDepartment[department.id] ?? 0}</p>
-                  </div>
+                  <div className="dp-department-right">{totals.byDepartment[department.id] ?? 0} staff</div>
                 </article>
               ))}
             </div>
           </div>
-        </section>
 
-        {/* Add department form */}
-        <section className="space-y-3">
-          <form
-            onSubmit={handleAddDepartment}
-            className="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-          >
-            <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-slate-50">
-              <Building2 className="h-3.5 w-3.5" />
-              Add new department
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-slate-700 dark:text-slate-200">Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={newDepartment.name}
-                  onChange={handleDepartmentChange}
-                  placeholder="e.g., Disaster Management"
-                  className="block w-full rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none ring-2 ring-transparent transition focus:border-indigo-500 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:border-indigo-400 dark:focus:ring-indigo-900/40"
-                />
+          <div className="dp-form-column">
+            <form onSubmit={handleAddDepartment} className="dp-panel dp-form-panel">
+              <div className="dp-panel-head">
+                <h3>Add Department</h3>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-700 dark:text-slate-200">Code</label>
+              <div className="dp-form-grid">
+                <label>
+                  Name
                   <input
                     type="text"
-                    name="code"
-                    value={newDepartment.code}
+                    name="name"
+                    value={newDepartment.name}
                     onChange={handleDepartmentChange}
-                    placeholder="Short code (3–4 letters)"
-                    className="block w-full rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none ring-2 ring-transparent transition focus:border-indigo-500 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:border-indigo-400 dark:focus:ring-indigo-900/40"
+                    placeholder="Disaster Response"
                   />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-700 dark:text-slate-200">
-                    Primary contact
+                </label>
+
+                <div className="dp-two-col">
+                  <label>
+                    Code
+                    <input
+                      type="text"
+                      name="code"
+                      value={newDepartment.code}
+                      onChange={handleDepartmentChange}
+                      placeholder="DRS"
+                    />
                   </label>
-                  <div className="relative">
-                    <Phone className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+
+                  <label>
+                    Primary Contact
                     <input
                       type="text"
                       name="primaryContact"
                       value={newDepartment.primaryContact}
                       onChange={handleDepartmentChange}
-                      placeholder="Name or desk (optional)"
-                      className="block w-full rounded-lg border border-slate-300 bg-slate-50 px-7 py-1.5 text-xs text-slate-900 outline-none ring-2 ring-transparent transition focus:border-indigo-500 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:border-indigo-400 dark:focus:ring-indigo-900/40"
+                      placeholder="Desk / person"
                     />
-                  </div>
+                  </label>
                 </div>
+
+                <button type="submit" className="dp-primary-btn">
+                  <Building2 size={14} />
+                  Save Department
+                </button>
+              </div>
+            </form>
+
+            <form onSubmit={handleAddEmployee} className="dp-panel dp-form-panel">
+              <div className="dp-panel-head">
+                <h3>Add Employee</h3>
               </div>
 
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:ring-offset-slate-900"
-              >
-                <Building2 className="h-3.5 w-3.5" />
-                Save department
-              </button>
-            </div>
-          </form>
-
-          <form
-            onSubmit={handleAddEmployee}
-            className="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
-          >
-            <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-slate-50">
-              <UserPlus className="h-3.5 w-3.5" />
-              Add new employee
-            </h3>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-700 dark:text-slate-200">Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={newEmployee.name}
-                    onChange={handleEmployeeChange}
-                    placeholder="Full name"
-                    className="block w-full rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none ring-2 ring-transparent transition focus:border-indigo-500 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:border-indigo-400 dark:focus:ring-indigo-900/40"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-700 dark:text-slate-200">Role</label>
-                  <div className="relative">
-                    <Briefcase className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <div className="dp-form-grid">
+                <div className="dp-two-col">
+                  <label>
+                    Name
                     <input
                       type="text"
-                      name="role"
-                      value={newEmployee.role}
+                      name="name"
+                      value={newEmployee.name}
                       onChange={handleEmployeeChange}
-                      placeholder="e.g., Control room operator"
-                      className="block w-full rounded-lg border border-slate-300 bg-slate-50 px-7 py-1.5 text-xs text-slate-900 outline-none ring-2 ring-transparent transition focus:border-indigo-500 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:border-indigo-400 dark:focus:ring-indigo-900/40"
+                      placeholder="Full name"
                     />
-                  </div>
-                </div>
-              </div>
+                  </label>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                  <label>
+                    Role
+                    <div className="dp-input-icon-wrap">
+                      <Briefcase size={13} className="dp-input-icon" />
+                      <input
+                        type="text"
+                        name="role"
+                        value={newEmployee.role}
+                        onChange={handleEmployeeChange}
+                        placeholder="Role / responsibility"
+                      />
+                    </div>
+                  </label>
+                </div>
+
+                <div className="dp-three-col">
+                  <label>
                     Department
+                    <select name="departmentId" value={newEmployee.departmentId} onChange={handleEmployeeChange}>
+                      {departments.map((department) => (
+                        <option key={department.id} value={department.id}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
                   </label>
-                  <select
-                    name="departmentId"
-                    value={newEmployee.departmentId}
-                    onChange={handleEmployeeChange}
-                    className="block w-full cursor-pointer rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none ring-2 ring-transparent transition focus:border-indigo-500 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:border-indigo-400 dark:focus:ring-indigo-900/40"
-                  >
-                    {departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-700 dark:text-slate-200">Shift</label>
-                  <select
-                    name="shift"
-                    value={newEmployee.shift}
-                    onChange={handleEmployeeChange}
-                    className="block w-full cursor-pointer rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none ring-2 ring-transparent transition focus:border-indigo-500 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:border-indigo-400 dark:focus:ring-indigo-900/40"
-                  >
-                    <option value="Day">Day</option>
-                    <option value="Morning">Morning</option>
-                    <option value="Night">Night</option>
-                    <option value="Rotational">Rotational</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-slate-700 dark:text-slate-200">
+
+                  <label>
+                    Shift
+                    <select name="shift" value={newEmployee.shift} onChange={handleEmployeeChange}>
+                      <option value="Day">Day</option>
+                      <option value="Morning">Morning</option>
+                      <option value="Night">Night</option>
+                      <option value="Rotational">Rotational</option>
+                    </select>
+                  </label>
+
+                  <label>
                     Status
+                    <select name="status" value={newEmployee.status} onChange={handleEmployeeChange}>
+                      <option value="Active">Active</option>
+                      <option value="On leave">On leave</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
                   </label>
-                  <select
-                    name="status"
-                    value={newEmployee.status}
-                    onChange={handleEmployeeChange}
-                    className="block w-full cursor-pointer rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none ring-2 ring-transparent transition focus:border-indigo-500 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:border-indigo-400 dark:focus:ring-indigo-900/40"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="On leave">On leave</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
                 </div>
+
+                <button type="submit" className="dp-primary-btn">
+                  <UserPlus size={14} />
+                  Add Employee
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section className="dp-panel">
+          <div className="dp-panel-head dp-panel-head-wrap">
+            <h3>Employees by Department</h3>
+
+            <div className="dp-toolbar">
+              <div className="dp-search-wrap">
+                <Search size={13} />
+                <input
+                  type="text"
+                  value={employeeSearch}
+                  onChange={(event) => setEmployeeSearch(event.target.value)}
+                  placeholder="Search name, role, shift..."
+                />
               </div>
 
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:ring-offset-slate-900"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                Add employee
-              </button>
+              <select value={selectedDepartmentId} onChange={(event) => setSelectedDepartmentId(event.target.value)}>
+                <option value="all">All departments</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
             </div>
-          </form>
-        </section>
-      </div>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-50">Employees by department</h3>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">Filter:</span>
-            <select
-              value={selectedDepartmentId}
-              onChange={(event) => setSelectedDepartmentId(event.target.value)}
-              className="block cursor-pointer rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-900 outline-none ring-2 ring-transparent transition focus:border-indigo-500 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50 dark:focus:border-indigo-400 dark:focus:ring-indigo-900/40"
-            >
-              <option value="all">All departments</option>
-              {departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </select>
           </div>
-        </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full border-separate border-spacing-0">
-            <thead className="bg-slate-50 text-[11px] text-slate-500 dark:bg-slate-800/60 dark:text-slate-300">
-              <tr>
-                <th className="border-b border-slate-200 px-3 py-2 text-left font-medium dark:border-slate-800">Name</th>
-                <th className="border-b border-slate-200 px-3 py-2 text-left font-medium dark:border-slate-800">Department</th>
-                <th className="border-b border-slate-200 px-3 py-2 text-left font-medium dark:border-slate-800">Role</th>
-                <th className="border-b border-slate-200 px-3 py-2 text-left font-medium dark:border-slate-800">Shift</th>
-                <th className="border-b border-slate-200 px-3 py-2 text-left font-medium dark:border-slate-800">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredEmployees.map((employee, index) => {
-                const department = departments.find((departmentItem) => departmentItem.id === employee.departmentId)
-                return (
-                  <tr
-                    key={employee.id}
-                    className={index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-900/60'}
-                  >
-                    <td className="border-b border-slate-200 px-3 py-2 text-[11px] text-slate-700 dark:border-slate-800 dark:text-slate-100">
-                      {employee.name}
-                    </td>
-                    <td className="border-b border-slate-200 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                      {department?.name || '—'}
-                    </td>
-                    <td className="border-b border-slate-200 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                      {employee.role}
-                    </td>
-                    <td className="border-b border-slate-200 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                      {employee.shift}
-                    </td>
-                    <td className="border-b border-slate-200 px-3 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:text-slate-300">
-                      {employee.status}
+          <div className="dp-table-wrap">
+            <table className="dp-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Department</th>
+                  <th>Role</th>
+                  <th>Shift</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEmployees.map((employee) => {
+                  const department = departments.find((departmentItem) => departmentItem.id === employee.departmentId)
+                  return (
+                    <tr key={employee.id}>
+                      <td>{employee.name}</td>
+                      <td>{department?.name || '—'}</td>
+                      <td>{employee.role}</td>
+                      <td>{employee.shift}</td>
+                      <td>
+                        <span className={`dp-status ${statusTone(employee.status)}`}>{employee.status}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+
+                {filteredEmployees.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="dp-empty-row">
+                      No employees for the current filter.
                     </td>
                   </tr>
-                )
-              })}
-              {filteredEmployees.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="border-t border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400"
-                  >
-                    No employees for this filter yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </>
   )
 }
+
+const PAGE_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+  [data-jatayu-theme="light"] .dp-root,
+  .dp-root {
+    --dp-bg: transparent;
+    --dp-panel-bg: #ffffff;
+    --dp-panel-border: rgba(226,232,240,0.9);
+    --dp-panel-shadow: 0 1px 5px rgba(15,23,42,0.05), 0 8px 24px rgba(15,23,42,0.05);
+    --dp-title: #0f172a;
+    --dp-sub: #64748b;
+    --dp-text: #334155;
+    --dp-muted: #94a3b8;
+    --dp-input-bg: #f8fafc;
+    --dp-input-border: #dbe3ef;
+    --dp-table-head: #f8fafc;
+    --dp-table-row: #ffffff;
+    --dp-table-row-alt: #f8fafc;
+    --dp-table-border: #e2e8f0;
+    --dp-primary: #4f46e5;
+    --dp-primary-text: #ffffff;
+    --dp-chip-bg: rgba(99,102,241,0.08);
+    --dp-chip-text: #4338ca;
+  }
+
+  [data-jatayu-theme="dark"] .dp-root {
+    --dp-bg: transparent;
+    --dp-panel-bg: rgba(13,17,27,0.88);
+    --dp-panel-border: rgba(255,255,255,0.08);
+    --dp-panel-shadow: 0 2px 10px rgba(0,0,0,0.45);
+    --dp-title: #f1f5f9;
+    --dp-sub: #94a3b8;
+    --dp-text: #cbd5e1;
+    --dp-muted: #64748b;
+    --dp-input-bg: rgba(255,255,255,0.04);
+    --dp-input-border: rgba(255,255,255,0.1);
+    --dp-table-head: rgba(255,255,255,0.03);
+    --dp-table-row: transparent;
+    --dp-table-row-alt: rgba(255,255,255,0.02);
+    --dp-table-border: rgba(255,255,255,0.08);
+    --dp-primary: #6366f1;
+    --dp-primary-text: #ffffff;
+    --dp-chip-bg: rgba(99,102,241,0.2);
+    --dp-chip-text: #c7d2fe;
+  }
+
+  .dp-root {
+    display: grid;
+    gap: 14px;
+    font-family: 'Outfit', system-ui, sans-serif;
+    color: var(--dp-text);
+    background: var(--dp-bg);
+  }
+
+  .dp-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+    border: 1px solid var(--dp-panel-border);
+    background: var(--dp-panel-bg);
+    box-shadow: var(--dp-panel-shadow);
+    border-radius: 16px;
+    padding: 14px;
+  }
+
+  .dp-eyebrow {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--dp-muted);
+    font-weight: 700;
+  }
+
+  .dp-title {
+    margin: 5px 0 0;
+    font-size: 22px;
+    color: var(--dp-title);
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  .dp-subtitle {
+    margin: 7px 0 0;
+    max-width: 780px;
+    color: var(--dp-sub);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .dp-admin-chip {
+    border: 1px solid rgba(16,185,129,0.24);
+    background: rgba(16,185,129,0.12);
+    color: #047857;
+    border-radius: 999px;
+    padding: 6px 11px;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .dp-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .dp-metric {
+    border: 1px solid var(--dp-panel-border);
+    background: var(--dp-panel-bg);
+    box-shadow: var(--dp-panel-shadow);
+    border-radius: 13px;
+    padding: 11px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .dp-metric-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dp-metric-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .dp-metric-label {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--dp-sub);
+    font-weight: 600;
+  }
+
+  .dp-metric-indigo .dp-metric-icon { background: rgba(79,70,229,0.14); color: #4338ca; }
+  .dp-metric-indigo .dp-metric-value { color: #4338ca; }
+  .dp-metric-sky .dp-metric-icon { background: rgba(14,165,233,0.14); color: #0369a1; }
+  .dp-metric-sky .dp-metric-value { color: #0369a1; }
+  .dp-metric-emerald .dp-metric-icon { background: rgba(16,185,129,0.14); color: #047857; }
+  .dp-metric-emerald .dp-metric-value { color: #047857; }
+  .dp-metric-amber .dp-metric-icon { background: rgba(245,158,11,0.18); color: #b45309; }
+  .dp-metric-amber .dp-metric-value { color: #b45309; }
+
+  .dp-main-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .dp-panel {
+    border: 1px solid var(--dp-panel-border);
+    background: var(--dp-panel-bg);
+    box-shadow: var(--dp-panel-shadow);
+    border-radius: 14px;
+    padding: 12px;
+  }
+
+  .dp-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .dp-panel-head h3 {
+    margin: 0;
+    font-size: 14px;
+    color: var(--dp-title);
+    font-weight: 700;
+  }
+
+  .dp-panel-head span {
+    color: var(--dp-sub);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .dp-department-list {
+    display: grid;
+    gap: 8px;
+    max-height: 450px;
+    overflow: auto;
+    padding-right: 2px;
+  }
+
+  .dp-department-item {
+    border: 1px solid var(--dp-table-border);
+    background: var(--dp-table-row-alt);
+    border-radius: 12px;
+    padding: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .dp-department-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .dp-code-badge {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: var(--dp-chip-bg);
+    color: var(--dp-chip-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    flex-shrink: 0;
+  }
+
+  .dp-department-name {
+    margin: 0;
+    font-size: 13px;
+    color: var(--dp-title);
+    font-weight: 700;
+  }
+
+  .dp-department-contact {
+    margin: 3px 0 0;
+    font-size: 11px;
+    color: var(--dp-sub);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .dp-department-right {
+    font-size: 11px;
+    color: var(--dp-sub);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .dp-form-column {
+    display: grid;
+    gap: 10px;
+  }
+
+  .dp-form-panel {
+    padding-top: 10px;
+  }
+
+  .dp-form-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .dp-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .dp-three-col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .dp-form-grid label {
+    display: grid;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--dp-sub);
+    font-weight: 700;
+  }
+
+  .dp-form-grid input,
+  .dp-form-grid select,
+  .dp-toolbar select,
+  .dp-search-wrap input {
+    border: 1px solid var(--dp-input-border);
+    background: var(--dp-input-bg);
+    color: var(--dp-title);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .dp-form-grid input:focus,
+  .dp-form-grid select:focus,
+  .dp-toolbar select:focus,
+  .dp-search-wrap input:focus {
+    border-color: rgba(79,70,229,0.45);
+    box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+  }
+
+  .dp-input-icon-wrap {
+    position: relative;
+  }
+
+  .dp-input-icon {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--dp-muted);
+  }
+
+  .dp-input-icon-wrap input {
+    padding-left: 30px;
+  }
+
+  .dp-primary-btn {
+    border: 1px solid var(--dp-primary);
+    background: var(--dp-primary);
+    color: var(--dp-primary-text);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: filter 0.2s ease;
+  }
+
+  .dp-primary-btn:hover {
+    filter: brightness(1.06);
+  }
+
+  .dp-panel-head-wrap {
+    flex-wrap: wrap;
+  }
+
+  .dp-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .dp-search-wrap {
+    position: relative;
+    min-width: 240px;
+    flex: 1;
+  }
+
+  .dp-search-wrap svg {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--dp-muted);
+  }
+
+  .dp-search-wrap input {
+    padding-left: 31px;
+  }
+
+  .dp-table-wrap {
+    overflow-x: auto;
+  }
+
+  .dp-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+  }
+
+  .dp-table thead th {
+    background: var(--dp-table-head);
+    color: var(--dp-sub);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: left;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--dp-table-border);
+  }
+
+  .dp-table tbody td {
+    padding: 10px;
+    font-size: 12px;
+    color: var(--dp-text);
+    border-bottom: 1px solid var(--dp-table-border);
+  }
+
+  .dp-table tbody tr:nth-child(odd) td {
+    background: var(--dp-table-row);
+  }
+
+  .dp-table tbody tr:nth-child(even) td {
+    background: var(--dp-table-row-alt);
+  }
+
+  .dp-status {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid transparent;
+  }
+
+  .dp-status-active {
+    color: #047857;
+    background: rgba(16,185,129,0.14);
+    border-color: rgba(16,185,129,0.28);
+  }
+
+  .dp-status-leave {
+    color: #b45309;
+    background: rgba(245,158,11,0.18);
+    border-color: rgba(245,158,11,0.3);
+  }
+
+  .dp-status-inactive {
+    color: #b91c1c;
+    background: rgba(239,68,68,0.12);
+    border-color: rgba(239,68,68,0.3);
+  }
+
+  .dp-empty-row {
+    text-align: center;
+    color: var(--dp-muted);
+    font-style: italic;
+  }
+
+  @media (max-width: 1200px) {
+    .dp-main-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .dp-form-column {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .dp-metrics {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dp-two-col,
+    .dp-three-col,
+    .dp-form-column {
+      grid-template-columns: 1fr;
+    }
+
+    .dp-search-wrap {
+      min-width: 100%;
+      width: 100%;
+    }
+  }
+`;

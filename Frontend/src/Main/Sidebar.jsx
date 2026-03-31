@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 
 // ─── Lucide-style SVG icon components (no external dep needed) ───────────────
 const icons = {
@@ -79,6 +79,8 @@ const NAV_SECTIONS = [
     group: 'Operations',
     items: [
       { id: 'live-alerts',        label: 'Live Alerts',        icon: icons.alert,         badgeColor: '#ef4444' },
+      { id: 'hazard-alerts',      label: 'Hazard Alerts',      icon: icons.shield,        badgeColor: '#ef4444' },
+      { id: 'garbage-alerts',     label: 'Garbage Alerts',     icon: icons.trash2,        badgeColor: '#f97316' },
       { id: 'camera-network',     label: 'Camera Network',     icon: icons.camera,        badgeColor: '#10b981' },
       { id: 'citizen-reports',    label: 'Citizen Reports',    icon: icons.messageSquare, badgeColor: '#f59e0b' },
     ],
@@ -158,7 +160,7 @@ export default function Sidebar({ active, onChange, isDark, onThemeToggle, colla
   const resolvedRoleLabel = userRole ? (roleLabelMap[userRole] || userRole) : 'Official'
 
   const isAdmin = userRole === 'ADMIN'
-  const adminOnlyIds = new Set(['garbage-monitoring', 'department-panel', 'analytics'])
+  const adminOnlyIds = new Set(['hazard-alerts', 'garbage-alerts', 'garbage-monitoring', 'department-panel', 'analytics'])
   const visibleSections = NAV_SECTIONS.map(section => ({
     ...section,
     items: section.items.filter(item => isAdmin || !adminOnlyIds.has(item.id)),
@@ -297,24 +299,11 @@ export default function Sidebar({ active, onChange, isDark, onThemeToggle, colla
   )
 }
 
-// ── Clock updater (mounted externally via effect in MainLayout) ──────────────
-export function useSidebarClock() {
-  useEffect(() => {
-    const update = () => {
-      const el = document.getElementById('jtsb-clock')
-      if (el) el.textContent = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-    }
-    update()
-    const id = setInterval(update, 10000)
-    return () => clearInterval(id)
-  }, [])
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // CSS
 // ─────────────────────────────────────────────────────────────────────────────
 const SIDEBAR_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 
   [data-jatayu-theme="light"] .jtsb-root {
     --sb-bg:          #ffffff;
@@ -406,7 +395,7 @@ const SIDEBAR_CSS = `
                 border-color 0.4s ease;
     position: relative;
     overflow: hidden;
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: 'Poppins', 'Segoe UI', sans-serif;
     z-index: 10;
   }
 
@@ -455,8 +444,8 @@ const SIDEBAR_CSS = `
   }
 
   .jtsb-brand-name {
-    font-family: 'Syne', sans-serif;
-    font-size: 15px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 16px;
     font-weight: 800;
     color: var(--sb-text);
     letter-spacing: -0.3px;
@@ -466,7 +455,7 @@ const SIDEBAR_CSS = `
   }
 
   .jtsb-brand-sub {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--sb-muted);
     text-transform: uppercase;
     letter-spacing: 0.7px;
@@ -508,7 +497,7 @@ const SIDEBAR_CSS = `
   }
 
   .jtsb-status-text {
-    font-size: 10.5px;
+    font-size: 11.5px;
     color: var(--sb-status-text);
     font-weight: 500;
     flex: 1;
@@ -516,7 +505,7 @@ const SIDEBAR_CSS = `
   }
 
   .jtsb-status-time {
-    font-size: 10px;
+    font-size: 10.5px;
     color: var(--sb-muted);
     font-variant-numeric: tabular-nums;
     transition: color 0.3s;
@@ -538,7 +527,7 @@ const SIDEBAR_CSS = `
   }
 
   .jtsb-section-label {
-    font-size: 9.5px;
+    font-size: 10.5px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -573,8 +562,8 @@ const SIDEBAR_CSS = `
     cursor: pointer;
     text-align: left;
     transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
-    font-family: 'DM Sans', system-ui, sans-serif;
-    font-size: 13px;
+    font-family: 'Poppins', 'Segoe UI', sans-serif;
+    font-size: 14px;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -625,7 +614,7 @@ const SIDEBAR_CSS = `
   }
 
   .jtsb-badge {
-    font-size: 9.5px;
+    font-size: 10.5px;
     font-weight: 700;
     padding: 2px 6px;
     border-radius: 999px;
@@ -643,7 +632,7 @@ const SIDEBAR_CSS = `
     transform: translateY(-50%);
     background: var(--sb-tooltip-bg);
     color: var(--sb-tooltip-text);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     padding: 5px 10px;
     border-radius: 7px;
@@ -688,7 +677,7 @@ const SIDEBAR_CSS = `
     border-radius: 9px;
     background: var(--sb-avatar-bg);
     display: flex; align-items:center; justify-content:center;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     color: #fff;
     flex-shrink: 0;
@@ -718,7 +707,7 @@ const SIDEBAR_CSS = `
   }
 
   .jtsb-user-role {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--sb-muted);
     white-space: nowrap;
     overflow: hidden;

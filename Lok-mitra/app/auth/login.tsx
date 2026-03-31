@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { loginCitizen, setAuthToken } from '@/lib/authApi';
+import { loginCitizen, setAuthSession } from '@/lib/authApi';
 
 const C = {
   white: '#FFFFFF',
@@ -210,7 +210,7 @@ export default function LoginScreen() {
       });
 
       if (data?.token) {
-        setAuthToken(data.token);
+        setAuthSession(data.token, data?.user ?? null);
       }
       setIsError(false);
       setMessage(data?.message ?? 'Login successful');

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 const Ic = {
@@ -100,7 +100,7 @@ const SOURCE_FILTERS = [
 const STATUS_META = {
   'Pending pickup':          { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.25)',   icon: Ic.alert },
   'Scheduled cleaning':      { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)', icon: Ic.calendar },
-  'Under observation':       { color: '#6366f1', bg: 'rgba(99,102,241,0.1)', border: 'rgba(99,102,241,0.25)', icon: Ic.eye },
+  'Under observation':       { color: '#16a34a', bg: 'rgba(22,163,74,0.1)', border: 'rgba(22,163,74,0.25)', icon: Ic.eye },
   'Cleaned, monitoring':     { color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)', icon: Ic.checkCircle },
   'Escalated to department': { color: '#f97316', bg: 'rgba(249,115,22,0.1)', border: 'rgba(249,115,22,0.25)', icon: Ic.zap },
 }
@@ -108,7 +108,7 @@ const STATUS_META = {
 const BAND_META = {
   morning:   { label: 'Morning',   sub: '5–10 AM',  icon: Ic.sunrise, color: '#f59e0b', gradient: 'linear-gradient(90deg,#fbbf24,#f59e0b)' },
   afternoon: { label: 'Afternoon', sub: '12–5 PM',  icon: Ic.sun,     color: '#f97316', gradient: 'linear-gradient(90deg,#fb923c,#f97316)' },
-  night:     { label: 'Night',     sub: '8–11 PM',  icon: Ic.moon,    color: '#818cf8', gradient: 'linear-gradient(90deg,#a5b4fc,#818cf8)' },
+  night:     { label: 'Night',     sub: '8–11 PM',  icon: Ic.moon,    color: '#16a34a', gradient: 'linear-gradient(90deg,#4ade80,#16a34a)' },
 }
 
 const HOTSPOTS = [
@@ -137,10 +137,11 @@ function AnimBar({ percent, gradient, delay = 0 }) {
 }
 
 // ─── Report count pill ────────────────────────────────────────────────────────
-function CountPill({ value, label, color, icon: Icon }) {
+function CountPill({ value, label, color, icon }) {
+  const IconComponent = icon
   return (
     <div className="gm-count-pill" style={{ '--cp-color': color, '--cp-bg': `${color}14`, '--cp-border': `${color}30` }}>
-      <Icon width={11} height={11} style={{ color }}/>
+      <IconComponent width={11} height={11} style={{ color }}/>
       <span style={{ color }}>{value}</span>
       <span className="gm-count-label">{label}</span>
     </div>
@@ -188,8 +189,8 @@ function HotspotCard({ spot, index }) {
 
         {/* ── Report counts + bar ─────────────────── */}
         <div className="gm-counts-row">
-          <CountPill value={spot.citizenReports}   label="citizen"   color="#6366f1" icon={Ic.users}    />
-          <CountPill value={spot.municipalReports}  label="municipal" color="#10b981" icon={Ic.building} />
+          <CountPill value={spot.citizenReports}   label="citizen"   color="#f59e0b" icon={Ic.users}    />
+          <CountPill value={spot.municipalReports}  label="municipal" color="#16a34a" icon={Ic.building} />
           <div className="gm-total-chip">
             <span className="gm-total-num">{total}</span>
             <span className="gm-total-label">total</span>
@@ -210,8 +211,8 @@ function HotspotCard({ spot, index }) {
           />
         </div>
         <div className="gm-split-legend">
-          <span><span className="gm-dot" style={{ background: '#6366f1' }}/> Citizen {citizenPct}%</span>
-          <span><span className="gm-dot" style={{ background: '#10b981' }}/> Municipal {100 - citizenPct}%</span>
+          <span><span className="gm-dot" style={{ background: '#f59e0b' }}/> Citizen {citizenPct}%</span>
+          <span><span className="gm-dot" style={{ background: '#16a34a' }}/> Municipal {100 - citizenPct}%</span>
         </div>
 
         {/* ── Time bands ──────────────────────────── */}
@@ -308,20 +309,20 @@ export default function GarbageMonitoring() {
               </div>
             </div>
             <div className="gm-stat-card">
-              <div className="gm-stat-icon" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
+              <div className="gm-stat-icon" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}>
                 <Ic.users width={14} height={14}/>
               </div>
               <div>
-                <div className="gm-stat-num" style={{ color: '#6366f1' }}>{totals.citizen}</div>
+                <div className="gm-stat-num" style={{ color: '#b45309' }}>{totals.citizen}</div>
                 <div className="gm-stat-label">Citizen reports</div>
               </div>
             </div>
             <div className="gm-stat-card">
-              <div className="gm-stat-icon" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>
+              <div className="gm-stat-icon" style={{ background: 'rgba(22,163,74,0.12)', color: '#166534' }}>
                 <Ic.building width={14} height={14}/>
               </div>
               <div>
-                <div className="gm-stat-num" style={{ color: '#10b981' }}>{totals.municipal}</div>
+                <div className="gm-stat-num" style={{ color: '#166534' }}>{totals.municipal}</div>
                 <div className="gm-stat-label">Municipal reports</div>
               </div>
             </div>
@@ -374,7 +375,7 @@ export default function GarbageMonitoring() {
                   <h3 className="gm-panel-title">Dumping Time Patterns</h3>
                   <p className="gm-panel-sub">Peak activity windows across hotspots</p>
                 </div>
-                <Ic.alert width={14} height={14} style={{ color: '#f59e0b', marginLeft: 'auto', flexShrink: 0 }}/>
+                <Ic.alert width={14} height={14} style={{ color: '#b45309', marginLeft: 'auto', flexShrink: 0 }}/>
               </div>
 
               <div className="gm-time-bars">
@@ -423,7 +424,7 @@ export default function GarbageMonitoring() {
                     <div key={spot.id} className="gm-zone-row" style={{ '--i': i }}>
                       <span className="gm-zone-name">{spot.zone}</span>
                       <div className="gm-zone-bar-wrap">
-                        <AnimBar percent={pct} gradient="linear-gradient(90deg,#6366f1,#818cf8)" delay={i * 60}/>
+                        <AnimBar percent={pct} gradient="linear-gradient(90deg,#f59e0b,#16a34a)" delay={i * 60}/>
                       </div>
                       <span className="gm-zone-count">{total}</span>
                     </div>
@@ -435,7 +436,7 @@ export default function GarbageMonitoring() {
             {/* Planning notes */}
             <div className="gm-panel gm-notes-panel">
               <div className="gm-panel-header">
-                <div className="gm-panel-icon-wrap" style={{ background: 'rgba(99,102,241,0.12)', color: '#818cf8' }}>
+                <div className="gm-panel-icon-wrap" style={{ background: 'rgba(245,158,11,0.14)', color: '#b45309' }}>
                   <Ic.zap width={14} height={14}/>
                 </div>
                 <div>
@@ -449,11 +450,11 @@ export default function GarbageMonitoring() {
                   Use morning and night peaks to schedule targeted patrols at high-activity hotspots.
                 </li>
                 <li className="gm-note-item" style={{ '--ni': 1 }}>
-                  <span className="gm-note-dot" style={{ background: '#6366f1' }}/>
+                  <span className="gm-note-dot" style={{ background: '#f59e0b' }}/>
                   Combine citizen and municipal reports to confirm repeat dumping locations.
                 </li>
                 <li className="gm-note-item" style={{ '--ni': 2 }}>
-                  <span className="gm-note-dot" style={{ background: '#10b981' }}/>
+                  <span className="gm-note-dot" style={{ background: '#16a34a' }}/>
                   Share this view with ward officers during daily briefings for action planning.
                 </li>
               </ul>
@@ -470,7 +471,7 @@ export default function GarbageMonitoring() {
 // CSS
 // ─────────────────────────────────────────────────────────────────────────────
 const GM_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 
   /* ── TOKENS ──────────────────────────────────── */
   [data-jatayu-theme="light"] .gm-root,
@@ -480,7 +481,7 @@ const GM_CSS = `
     --gm-card-border:     rgba(226,232,240,0.9);
     --gm-card-shadow:     0 1px 4px rgba(15,23,42,0.05), 0 4px 16px rgba(15,23,42,0.06);
     --gm-card-hover-shadow: 0 4px 12px rgba(15,23,42,0.08), 0 12px 32px rgba(15,23,42,0.1);
-    --gm-card-hover-border: rgba(99,102,241,0.22);
+    --gm-card-hover-border: rgba(245,158,11,0.35);
     --gm-panel-bg:        #ffffff;
     --gm-panel-border:    rgba(226,232,240,0.9);
     --gm-panel-shadow:    0 1px 4px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.05);
@@ -498,8 +499,8 @@ const GM_CSS = `
     --gm-detail-val:      #334155;
     --gm-detail-bg:       #f8fafc;
     --gm-detail-border:   rgba(226,232,240,0.7);
-    --gm-expand-text:     #6366f1;
-    --gm-expand-bg:       rgba(99,102,241,0.05);
+    --gm-expand-text:     #b45309;
+    --gm-expand-bg:       rgba(245,158,11,0.1);
     --gm-stat-bg:         #f8fafc;
     --gm-stat-border:     rgba(226,232,240,0.8);
     --gm-stat-num:        #0f172a;
@@ -507,11 +508,11 @@ const GM_CSS = `
     --gm-filter-bg:       #f1f5f9;
     --gm-filter-border:   rgba(226,232,240,0.8);
     --gm-filter-text:     #64748b;
-    --gm-filter-active-bg: #4f46e5;
+    --gm-filter-active-bg: #f59e0b;
     --gm-filter-active-text: #ffffff;
     --gm-bar-track:       #f1f5f9;
-    --gm-panel-icon-bg:   rgba(99,102,241,0.08);
-    --gm-panel-icon-text: #6366f1;
+    --gm-panel-icon-bg:   rgba(245,158,11,0.12);
+    --gm-panel-icon-text: #b45309;
     --gm-time-label:      #334155;
     --gm-time-sub:        #94a3b8;
     --gm-zone-name:       #64748b;
@@ -531,7 +532,7 @@ const GM_CSS = `
     --gm-card-border:     rgba(255,255,255,0.06);
     --gm-card-shadow:     0 1px 4px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.2);
     --gm-card-hover-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.3);
-    --gm-card-hover-border: rgba(99,102,241,0.3);
+    --gm-card-hover-border: rgba(245,158,11,0.38);
     --gm-panel-bg:        #0f1623;
     --gm-panel-border:    rgba(255,255,255,0.06);
     --gm-panel-shadow:    0 1px 4px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
@@ -549,8 +550,8 @@ const GM_CSS = `
     --gm-detail-val:      #94a3b8;
     --gm-detail-bg:       rgba(255,255,255,0.02);
     --gm-detail-border:   rgba(255,255,255,0.05);
-    --gm-expand-text:     #818cf8;
-    --gm-expand-bg:       rgba(99,102,241,0.08);
+    --gm-expand-text:     #fbbf24;
+    --gm-expand-bg:       rgba(245,158,11,0.18);
     --gm-stat-bg:         rgba(255,255,255,0.03);
     --gm-stat-border:     rgba(255,255,255,0.07);
     --gm-stat-num:        #f1f5f9;
@@ -558,11 +559,11 @@ const GM_CSS = `
     --gm-filter-bg:       rgba(255,255,255,0.04);
     --gm-filter-border:   rgba(255,255,255,0.07);
     --gm-filter-text:     #475569;
-    --gm-filter-active-bg: #4f46e5;
+    --gm-filter-active-bg: #f59e0b;
     --gm-filter-active-text: #ffffff;
     --gm-bar-track:       rgba(255,255,255,0.05);
-    --gm-panel-icon-bg:   rgba(99,102,241,0.1);
-    --gm-panel-icon-text: #818cf8;
+    --gm-panel-icon-bg:   rgba(245,158,11,0.2);
+    --gm-panel-icon-text: #fbbf24;
     --gm-time-label:      #94a3b8;
     --gm-time-sub:        #475569;
     --gm-zone-name:       #475569;
@@ -599,7 +600,7 @@ const GM_CSS = `
 
   /* ── ROOT ─────────────────────────────────────── */
   .gm-root {
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: 'Poppins', sans-serif;
     display: flex;
     flex-direction: column;
     gap: 18px;
@@ -617,20 +618,21 @@ const GM_CSS = `
   }
 
   .gm-page-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 18px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 26px;
     font-weight: 800;
-    color: var(--gm-title);
-    letter-spacing: -0.4px;
+    color: #000000;
+    letter-spacing: -0.2px;
     margin: 0;
     transition: color 0.3s;
   }
 
   .gm-page-sub {
     margin-top: 5px;
-    font-size: 12.5px;
+    font-size: 15px;
     line-height: 1.6;
-    color: var(--gm-sub);
+    color: #475569;
+    font-weight: 500;
     max-width: 520px;
     transition: color 0.3s;
   }
@@ -662,16 +664,16 @@ const GM_CSS = `
   }
 
   .gm-stat-num {
-    font-family: 'Syne', sans-serif;
-    font-size: 18px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 24px;
     font-weight: 800;
-    color: var(--gm-stat-num);
+    color: #000000;
     line-height: 1;
     transition: color 0.3s;
   }
 
   .gm-stat-label {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--gm-stat-label);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -692,7 +694,7 @@ const GM_CSS = `
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.6px;
@@ -716,11 +718,11 @@ const GM_CSS = `
     border-radius: 7px;
     border: none;
     background: transparent;
-    color: var(--gm-filter-text);
-    font-size: 12px;
-    font-weight: 500;
+    color: #333333;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Poppins', sans-serif;
     transition: all 0.2s ease;
     white-space: nowrap;
   }
@@ -757,7 +759,7 @@ const GM_CSS = `
   .gm-empty {
     padding: 32px;
     text-align: center;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--gm-muted);
     background: var(--gm-empty-bg);
     border: 1px dashed var(--gm-empty-border);
@@ -809,9 +811,9 @@ const GM_CSS = `
   }
 
   .gm-rank-badge {
-    font-family: 'Syne', sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 11px;
-    font-weight: 800;
+    font-weight: 700;
     padding: 4px 8px;
     border-radius: 7px;
     background: var(--gm-rank-bg);
@@ -828,11 +830,11 @@ const GM_CSS = `
   }
 
   .gm-card-name {
-    font-family: 'Syne', sans-serif;
-    font-size: 14px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 16px;
     font-weight: 700;
-    color: var(--gm-title);
-    letter-spacing: -0.2px;
+    color: #000000;
+    letter-spacing: 0px;
     line-height: 1.25;
     margin: 0;
     transition: color 0.3s;
@@ -843,8 +845,9 @@ const GM_CSS = `
     align-items: center;
     gap: 4px;
     margin-top: 3px;
-    font-size: 11px;
-    color: var(--gm-muted);
+    font-size: 12px;
+    color: #555555;
+    font-weight: 500;
     transition: color 0.3s;
   }
 
@@ -854,7 +857,7 @@ const GM_CSS = `
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 10.5px;
+    font-size: 12px;
     font-weight: 600;
     padding: 4px 10px;
     border-radius: 999px;
@@ -879,7 +882,7 @@ const GM_CSS = `
     border-radius: 999px;
     background: var(--cp-bg);
     border: 1px solid var(--cp-border);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     flex-shrink: 0;
     transition: all 0.2s;
@@ -903,19 +906,20 @@ const GM_CSS = `
   }
 
   .gm-total-num {
-    font-family: 'Syne', sans-serif;
-    font-size: 16px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 20px;
     font-weight: 800;
-    color: var(--gm-title);
+    color: #000000;
     line-height: 1;
     transition: color 0.3s;
   }
 
   .gm-total-label {
-    font-size: 9px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.6px;
-    color: var(--gm-muted);
+    color: #666666;
+    font-weight: 600;
     transition: color 0.3s;
   }
 
@@ -932,7 +936,7 @@ const GM_CSS = `
 
   .gm-split-citizen {
     height: 100%;
-    background: #6366f1;
+    background: #f59e0b;
     border-radius: 999px 0 0 999px;
     transition: width 0.7s cubic-bezier(0.22,1,0.36,1);
     min-width: 4px;
@@ -950,7 +954,7 @@ const GM_CSS = `
   .gm-split-legend {
     display: flex;
     gap: 14px;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--gm-legend-text);
     transition: color 0.3s;
   }
@@ -982,14 +986,14 @@ const GM_CSS = `
     border-radius: 8px;
     background: var(--bb);
     border: 1px solid var(--gm-band-border);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--bc);
     transition: all 0.2s;
   }
 
   .gm-band-sub {
-    font-size: 9.5px;
+    font-size: 10.5px;
     opacity: 0.65;
   }
 
@@ -1004,11 +1008,11 @@ const GM_CSS = `
     border: none;
     background: var(--gm-expand-bg);
     border-radius: 8px;
-    color: var(--gm-expand-text);
-    font-size: 11.5px;
-    font-weight: 600;
+    color: #b45309;
+    font-size: 12.5px;
+    font-weight: 700;
     cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Poppins', sans-serif;
     transition: all 0.2s ease;
   }
   .gm-expand-btn:hover { opacity: 0.8; }
@@ -1036,7 +1040,7 @@ const GM_CSS = `
     align-items: flex-start;
     gap: 8px;
     color: var(--gm-muted);
-    font-size: 11.5px;
+    font-size: 12.5px;
   }
 
   .gm-detail-row > div {
@@ -1046,7 +1050,7 @@ const GM_CSS = `
   }
 
   .gm-detail-key {
-    font-size: 9.5px;
+    font-size: 10.5px;
     text-transform: uppercase;
     letter-spacing: 0.6px;
     color: var(--gm-detail-key);
@@ -1054,9 +1058,9 @@ const GM_CSS = `
   }
 
   .gm-detail-val {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--gm-detail-val);
+    font-size: 13px;
+    font-weight: 600;
+    color: #333333;
     transition: color 0.3s;
   }
 
@@ -1091,19 +1095,20 @@ const GM_CSS = `
   }
 
   .gm-panel-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 13px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 16px;
     font-weight: 700;
-    color: var(--gm-title);
-    letter-spacing: -0.2px;
+    color: #000000;
+    letter-spacing: 0px;
     margin: 0;
     line-height: 1.2;
     transition: color 0.3s;
   }
 
   .gm-panel-sub {
-    font-size: 10.5px;
-    color: var(--gm-muted);
+    font-size: 12px;
+    color: #666666;
+    font-weight: 500;
     margin-top: 2px;
     transition: color 0.3s;
   }
@@ -1138,15 +1143,15 @@ const GM_CSS = `
   }
 
   .gm-time-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--gm-time-label);
+    font-size: 13px;
+    font-weight: 700;
+    color: #333333;
     line-height: 1;
     transition: color 0.3s;
   }
 
   .gm-time-sub {
-    font-size: 9.5px;
+    font-size: 10.5px;
     color: var(--gm-time-sub);
     margin-top: 1px;
     transition: color 0.3s;
@@ -1161,9 +1166,10 @@ const GM_CSS = `
   }
 
   .gm-time-count {
-    font-family: 'Syne', sans-serif;
-    font-size: 14px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 16px;
     font-weight: 800;
+    color: #000000;
     flex-shrink: 0;
     width: 20px;
     text-align: right;
@@ -1200,7 +1206,7 @@ const GM_CSS = `
   }
 
   .gm-zone-name {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--gm-zone-name);
     width: 56px;
@@ -1215,10 +1221,10 @@ const GM_CSS = `
   }
 
   .gm-zone-count {
-    font-family: 'Syne', sans-serif;
-    font-size: 13px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
     font-weight: 700;
-    color: var(--gm-zone-count);
+    color: #333333;
     width: 24px;
     text-align: right;
     flex-shrink: 0;
@@ -1241,9 +1247,10 @@ const GM_CSS = `
     display: flex;
     align-items: flex-start;
     gap: 9px;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.6;
-    color: var(--gm-note-text);
+    color: #333333;
+    font-weight: 500;
     animation: gm-note-in 0.4s calc(var(--ni, 0) * 0.08s + 0.25s) both;
     transition: color 0.3s;
   }

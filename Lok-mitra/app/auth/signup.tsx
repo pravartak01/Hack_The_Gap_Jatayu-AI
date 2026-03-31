@@ -14,7 +14,7 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { setAuthToken, signupCitizen, verifyCitizenOtp } from '@/lib/authApi';
+import { setAuthSession, signupCitizen, verifyCitizenOtp } from '@/lib/authApi';
 
 // ─── Tricolor Design Tokens ───────────────────────────────────────────────────
 const C = {
@@ -62,15 +62,12 @@ function Field({
   error,
   ...props
 }: { label: string; hint?: string; error?: string } & React.ComponentProps<typeof TextInput>) {
-  const [focused, setFocused] = useState(false);
   const anim = useRef(new Animated.Value(0)).current;
 
   const onFocus = () => {
-    setFocused(true);
     Animated.timing(anim, { toValue: 1, duration: 180, useNativeDriver: false }).start();
   };
   const onBlur = () => {
-    setFocused(false);
     Animated.timing(anim, { toValue: 0, duration: 160, useNativeDriver: false }).start();
   };
 
@@ -188,11 +185,11 @@ export default function SignupScreen() {
       Animated.timing(fade,   { toValue: 1, duration: 480, useNativeDriver: true }),
       Animated.timing(slideY, { toValue: 0, duration: 420, useNativeDriver: true }),
     ]).start();
-  }, []);
+  }, [fade, slideY]);
 
   useEffect(() => {
     if (otpSent) Animated.timing(otpFade, { toValue: 1, duration: 360, useNativeDriver: true }).start();
-  }, [otpSent]);
+  }, [otpFade, otpSent]);
 
   const isPasswordMismatch = useMemo(
     () => confirmPass.length > 0 && password !== confirmPass,
@@ -221,7 +218,7 @@ export default function SignupScreen() {
     try {
       const data = await verifyCitizenOtp({ email: email.trim(), otp: otp.trim(), role: 'CITIZEN' });
       if (data?.token) {
-        setAuthToken(data.token);
+        setAuthSession(data.token, data?.user ?? null);
       }
       setIsError(false);
       setMessage(data?.message ?? 'Account activated. You may now sign in.');

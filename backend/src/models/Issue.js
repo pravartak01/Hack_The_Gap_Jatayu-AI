@@ -56,7 +56,8 @@ const issueSchema = new mongoose.Schema(
     hazard: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Hazard",
-      required: true,
+      required: false,
+      default: null,
     },
     hazardType: {
       type: String,

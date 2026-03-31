@@ -1,5 +1,14 @@
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://192.168.160.46:5000';
 let authToken: string | null = null;
+let authUser: AuthUser | null = null;
+
+export type AuthUser = {
+  id?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  empID?: string;
+};
 
 type SignupPayload = {
   name: string;
@@ -51,7 +60,7 @@ export type CitizenComplaint = {
   createdAt: string;
   updatedAt: string;
   logs?: ComplaintLog[];
-  media?: Array<{ type: 'image' | 'video'; url: string }>;
+  media?: { type: 'image' | 'video'; url: string }[];
 };
 
 async function request(path: string, body: object) {
@@ -78,6 +87,19 @@ export function setAuthToken(token: string | null) {
 
 export function getAuthToken() {
   return authToken;
+}
+
+export function setAuthUser(user: AuthUser | null) {
+  authUser = user;
+}
+
+export function getAuthUser() {
+  return authUser;
+}
+
+export function setAuthSession(token: string | null, user: AuthUser | null = null) {
+  authToken = token;
+  authUser = user;
 }
 
 export async function signupCitizen(payload: SignupPayload) {

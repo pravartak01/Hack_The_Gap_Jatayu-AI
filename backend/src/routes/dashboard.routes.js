@@ -10,5 +10,6 @@ router.get("/admin", requireAuth, allowRoles(ROLES.ADMIN), getAdminDashboard);
 router.get("/fire", requireAuth, allowRoles(ROLES.FIRE), getDepartmentDashboard);
 router.get("/police", requireAuth, allowRoles(ROLES.POLICE), getDepartmentDashboard);
 router.get("/traffic", requireAuth, allowRoles(ROLES.TRAFFIC), getDepartmentDashboard);
+router.get("/municipal", requireAuth, allowRoles(ROLES.MUNICIPAL), getDepartmentDashboard);
 
 module.exports = router;

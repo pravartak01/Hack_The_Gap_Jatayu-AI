@@ -18,25 +18,25 @@ router.get("/all-issues", requireAuth, allowRoles(ROLES.ADMIN), getAllIssues);
 router.get(
   "/assigned-issues",
   requireAuth,
-  allowRoles(ROLES.FIRE, ROLES.POLICE, ROLES.TRAFFIC),
+  allowRoles(ROLES.FIRE, ROLES.POLICE, ROLES.TRAFFIC, ROLES.MUNICIPAL),
   getAssignedIssues
 );
 router.patch(
   "/update-status",
   requireAuth,
-  allowRoles(ROLES.FIRE, ROLES.POLICE, ROLES.TRAFFIC),
+  allowRoles(ROLES.FIRE, ROLES.POLICE, ROLES.TRAFFIC, ROLES.MUNICIPAL),
   updateStatus
 );
 router.post(
   "/add-update",
   requireAuth,
-  allowRoles(ROLES.FIRE, ROLES.POLICE, ROLES.TRAFFIC),
+  allowRoles(ROLES.FIRE, ROLES.POLICE, ROLES.TRAFFIC, ROLES.MUNICIPAL),
   addUpdate
 );
 router.post(
   "/resolve-issue",
   requireAuth,
-  allowRoles(ROLES.FIRE, ROLES.POLICE, ROLES.TRAFFIC),
+  allowRoles(ROLES.FIRE, ROLES.POLICE, ROLES.TRAFFIC, ROLES.MUNICIPAL),
   resolveIssue
 );
 

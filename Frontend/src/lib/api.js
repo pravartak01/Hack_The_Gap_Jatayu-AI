@@ -96,16 +96,24 @@ export const api = {
     });
   },
 
-  routeHazard(token, hazardId, departments) {
+  routeHazard(token, hazardId, department) {
     return request('/admin/route-hazard', {
       method: 'POST',
       token,
-      body: departments ? { hazardId, departments } : { hazardId },
+      body: department ? { hazardId, department } : { hazardId },
     });
   },
 
   getAllIssues(token) {
     return request('/admin/all-issues', { token });
+  },
+
+  resolveIssueByAdmin(token, payload) {
+    return request('/admin/issues/resolve', {
+      method: 'PATCH',
+      token,
+      body: payload,
+    });
   },
 
   getAllComplaints(token) {
@@ -143,6 +151,63 @@ export const api = {
     const path = `/admin/cloudinary-videos${query ? `?${query}` : ''}`;
 
     return request(path, { token });
+  },
+
+  getCloudinaryHazardVideosByType(token, type, { maxResults, nextCursor } = {}) {
+    const params = new URLSearchParams();
+
+    if (type) params.set('type', String(type));
+    if (maxResults) params.set('maxResults', String(maxResults));
+    if (nextCursor) params.set('nextCursor', nextCursor);
+
+    const query = params.toString();
+    const path = `/admin/cloudinary-videos-by-type${query ? `?${query}` : ''}`;
+
+    return request(path, { token });
+  },
+
+  getHazardAlertVideos(token, { maxResults, nextCursor } = {}) {
+    const params = new URLSearchParams();
+
+    if (maxResults) params.set('maxResults', String(maxResults));
+    if (nextCursor) params.set('nextCursor', nextCursor);
+
+    const query = params.toString();
+    const path = `/admin/videos/fire${query ? `?${query}` : ''}`;
+
+    return request(path, { token });
+  },
+
+  getWeaponAlertVideos(token, { maxResults, nextCursor } = {}) {
+    const params = new URLSearchParams();
+
+    if (maxResults) params.set('maxResults', String(maxResults));
+    if (nextCursor) params.set('nextCursor', nextCursor);
+
+    const query = params.toString();
+    const path = `/admin/videos/weapon${query ? `?${query}` : ''}`;
+
+    return request(path, { token });
+  },
+
+  getGarbageAlertVideos(token, { maxResults, nextCursor } = {}) {
+    const params = new URLSearchParams();
+
+    if (maxResults) params.set('maxResults', String(maxResults));
+    if (nextCursor) params.set('nextCursor', nextCursor);
+
+    const query = params.toString();
+    const path = `/admin/videos/garbage${query ? `?${query}` : ''}`;
+
+    return request(path, { token });
+  },
+
+  testHazardAlert(token, payload) {
+    return request('/admin/test-hazard-alert', {
+      method: 'POST',
+      token,
+      body: payload,
+    });
   },
 
   getAssignedIssues(token, role) {

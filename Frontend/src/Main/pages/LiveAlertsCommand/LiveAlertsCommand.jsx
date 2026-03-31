@@ -3,7 +3,44 @@ import { api } from '../../../lib/api'
 import { getSession } from '../../../lib/session'
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
-const DEPARTMENTS = ['Police', 'Fire', 'Municipal', 'Traffic', 'Admin']
+const DEPARTMENTS = ['Police', 'Fire', 'Municipal', 'Traffic']
+const ALERT_TYPE_OPTIONS = ['All Alerts', 'Weapon', 'Garbage', 'Hazard']
+
+function detectAlertKind(hazardType) {
+  const text = String(hazardType || '').toLowerCase()
+  if (text.includes('weapon') || text.includes('gun') || text.includes('knife') || text.includes('arms')) return 'Weapon'
+  if (text.includes('garbage') || text.includes('waste') || text.includes('litter')) return 'Garbage'
+  return 'Hazard'
+}
+
+function detectVideoKind(video) {
+  const text = [video?.folder, video?.publicId, video?.resourceType, video?.type]
+    .map((part) => String(part || '').toLowerCase())
+    .join(' ')
+
+  if (text.includes('weapon') || text.includes('gun') || text.includes('knife') || text.includes('arms')) return 'Weapon'
+  if (text.includes('garbage') || text.includes('waste') || text.includes('litter')) return 'Garbage'
+  return 'Hazard'
+}
+
+async function fetchAllPagedVideos(fetchPage, pageSize = 50, maxPages = 2) {
+  let nextCursor
+  let pageCount = 0
+  const videos = []
+
+  while (pageCount < maxPages) {
+    // Pull all pages to avoid silently dropping videos after default page size.
+    const response = await fetchPage({ maxResults: pageSize, nextCursor })
+    const rows = Array.isArray(response?.videos) ? response.videos : []
+    videos.push(...rows)
+
+    nextCursor = response?.nextCursor || null
+    pageCount += 1
+    if (!nextCursor) break
+  }
+
+  return videos
+}
 
 // ─── Helpers for time/severity mapping ───────────────────────────────────────
 function formatDetectedAgo(detectedMs) {
@@ -16,7 +53,7 @@ function formatDetectedAgo(detectedMs) {
   return `${hours}h ago`
 }
 
-function mapVideoToFeed(video, index) {
+function mapVideoToFeed(video, index, alertKind = 'Hazard') {
   const createdAt = video.createdAt ? new Date(video.createdAt) : new Date()
   const detectedMs = Date.now() - createdAt.getTime()
   const baseName = String(video.publicId || '').split('/').pop() || 'Hazard clip'
@@ -37,6 +74,35 @@ function mapVideoToFeed(video, index) {
     zone: `Zone ${String.fromCharCode(65 + (index % 5))}`,
     secureUrl: video.secureUrl,
     thumbnailUrl: video.thumbnailUrl,
+    coordinates: { lat: 19.0748, lng: 72.8856 },
+    alertKind,
+  }
+}
+
+function mapIssueToFeed(issue, index) {
+  const createdAt = issue.createdAt ? new Date(issue.createdAt) : new Date()
+  const detectedMs = Date.now() - createdAt.getTime()
+  const alertKind = detectAlertKind(issue.hazardType)
+
+  return {
+    id: issue.issueId || issue._id || `issue-${index}`,
+    name: issue.hazardType || `${alertKind} incident`,
+    location: issue.location?.address || 'MGM University – https://maps.app.goo.gl/DLummAEdNyswRA3b9',
+    detectedAgo: formatDetectedAgo(detectedMs),
+    detectedMs,
+    severity: issue.status === 'Pending' ? 'High' : issue.status === 'Ongoing' ? 'Medium' : 'Low',
+    channel: `CH-${String((index % 32) + 1).padStart(2, '0')}`,
+    threat: alertKind === 'Garbage' ? 'Waste alert raised' : 'Potential hazard detected',
+    confidence: 92 + Math.floor(Math.random() * 7),
+    zone: `Zone ${String.fromCharCode(65 + (index % 5))}`,
+    secureUrl: issue.evidenceUrl || '',
+    thumbnailUrl: null,
+    coordinates: issue.location?.coordinates || null,
+    status: issue.status || 'Pending',
+    logs: Array.isArray(issue.logs) ? issue.logs : [],
+    hazardId: issue.hazard?._id || issue.hazard || null,
+    progress: [issue],
+    alertKind,
   }
 }
 
@@ -45,6 +111,52 @@ const severityConfig = {
   High:   { label: 'CRITICAL', pulse: '#ef4444', glow: 'rgba(239,68,68,0.25)', badge: 'lac-badge-high',   scan: '#ef4444' },
   Medium: { label: 'MODERATE', pulse: '#f59e0b', glow: 'rgba(245,158,11,0.2)', badge: 'lac-badge-med',    scan: '#f59e0b' },
   Low:    { label: 'ADVISORY', pulse: '#3b82f6', glow: 'rgba(59,130,246,0.15)', badge: 'lac-badge-low',   scan: '#3b82f6' },
+}
+
+const DEPARTMENT_LABELS = {
+  POLICE: 'Police',
+  FIRE: 'Fire',
+  TRAFFIC: 'Traffic',
+  MUNICIPAL: 'Municipal',
+}
+
+function getDepartmentLabel(code) {
+  return DEPARTMENT_LABELS[String(code || '').toUpperCase()] || 'Department'
+}
+
+function getStatusLabel(status) {
+  if (status === 'Ongoing') return 'In progress'
+  if (status === 'Resolved') return 'Completed'
+  return 'Received'
+}
+
+function getStatusTone(status) {
+  if (status === 'Resolved') return 'done'
+  if (status === 'Ongoing') return 'active'
+  return 'pending'
+}
+
+function getIssueEvents(issue) {
+  const rawLogs = Array.isArray(issue?.logs) ? [...issue.logs] : []
+  rawLogs.sort((a, b) => new Date(a?.createdAt || 0).getTime() - new Date(b?.createdAt || 0).getTime())
+
+  if (rawLogs.length === 0) {
+    const fallbackTs = issue?.updatedAt || issue?.createdAt || null
+    return [{
+      message: `Status updated to ${getStatusLabel(issue?.status)}`,
+      actor: null,
+      timestamp: fallbackTs,
+    }]
+  }
+
+  return rawLogs.map((log) => {
+    const actorName = log?.createdBy?.name || log?.createdBy?.role || null
+    return {
+      message: log?.message || 'Update posted',
+      actor: actorName,
+      timestamp: log?.createdAt || null,
+    }
+  })
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -114,6 +226,38 @@ const ConfidenceBar = ({ value, color }) => {
   )
 }
 
+// ─── Toast notification ───────────────────────────────────────────────────────
+const Toast = ({ message, icon, visible, onClose }) => {
+  useEffect(() => {
+    if (!visible) return
+    const timer = setTimeout(onClose, 4000)
+    return () => clearTimeout(timer)
+  }, [visible, onClose])
+
+  if (!visible) return null
+
+  return (
+    <div className="lac-toast" style={{ opacity: visible ? 1 : 0 }}>
+      {icon && <div className="lac-toast-icon">{icon}</div>}
+      <div className="lac-toast-message">{message}</div>
+    </div>
+  )
+}
+
+const CheckIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+)
+
+const ErrorIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="8" x2="12" y2="12"/>
+    <line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+)
+
 // ─── Animated waveform ────────────────────────────────────────────────────────
 const Waveform = ({ active }) => (
   <div className={`lac-wave${active ? ' lac-wave-active' : ''}`}>
@@ -124,7 +268,7 @@ const Waveform = ({ active }) => (
 )
 
 // ─── Camera feed card ─────────────────────────────────────────────────────────
-const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign, isAdmin, onStatusChange, onSendMessage }) => {
+const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign, isAdmin, onStatusChange, onSendMessage, onTriggerAlert, onResolveIssue }) => {
   const cfg = severityConfig[feed.severity]
   const assigned = assignedTo[feed.id]
   const [hovered, setHovered] = useState(false)
@@ -132,8 +276,15 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign, isAdmin, onStat
   const [message, setMessage] = useState('')
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [sendingMsg, setSendingMsg] = useState(false)
+  const [sendingAlert, setSendingAlert] = useState(false)
+  const [resolvingIssue, setResolvingIssue] = useState(false)
   const logs = Array.isArray(feed.logs) ? feed.logs : []
   const recentLogs = logs.slice(-3)
+  const canSendAlert = isAdmin && (feed.alertKind === 'Hazard' || feed.alertKind === 'Weapon')
+  const issueIdFromProgress = Array.isArray(feed.progress) && feed.progress.length
+    ? (feed.progress[0]?.issueId || feed.progress[0]?._id || null)
+    : null
+  const resolvableIssueId = feed.issueId || issueIdFromProgress || (String(feed.id || '').startsWith('IS-') ? feed.id : null)
 
   useEffect(() => {
     setLocalStatus(feed.status || '')
@@ -161,6 +312,26 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign, isAdmin, onStat
     }
   }
 
+  const handleSendAlert = async () => {
+    if (!onTriggerAlert || !canSendAlert) return
+    try {
+      setSendingAlert(true)
+      await onTriggerAlert(feed)
+    } finally {
+      setSendingAlert(false)
+    }
+  }
+
+  const handleResolveIssue = async () => {
+    if (!onResolveIssue || !resolvableIssueId) return
+    try {
+      setResolvingIssue(true)
+      await onResolveIssue(feed, resolvableIssueId)
+    } finally {
+      setResolvingIssue(false)
+    }
+  }
+
   return (
     <article
       className="lac-card"
@@ -172,6 +343,7 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign, isAdmin, onStat
       <div className="lac-card-top">
         <div className="lac-card-meta">
           <span className="lac-channel">{feed.channel}</span>
+          <span className={`lac-kind-chip${feed.alertKind === 'Garbage' ? ' lac-kind-garbage' : ''}${feed.alertKind === 'Weapon' ? ' lac-kind-weapon' : ''}`}>{feed.alertKind || 'Hazard'}</span>
           <span className="lac-zone">{feed.zone}</span>
         </div>
         <span className={`lac-sev-badge ${cfg.badge}`}>
@@ -245,10 +417,22 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign, isAdmin, onStat
           <Waveform active={hovered || feed.severity === 'High'} />
           <span className="lac-detected-ago">{feed.detectedAgo}</span>
         </div>
-        <button className="lac-locate-btn" aria-label="Live location">
-          <MapPinIcon />
-          Locate
-        </button>
+        <div className="lac-footer-left" style={{ gap: 6 }}>
+          {canSendAlert && (
+            <button
+              className="lac-dept-btn"
+              disabled={sendingAlert}
+              onClick={handleSendAlert}
+              aria-label="Send hazard alert email"
+            >
+              {sendingAlert ? 'Sending…' : 'Send Alert Email'}
+            </button>
+          )}
+          <button className="lac-locate-btn" aria-label="Live location">
+            <MapPinIcon />
+            Locate
+          </button>
+        </div>
       </div>
 
       {/* Admin: routing row | Department: progress + message row */}
@@ -259,8 +443,8 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign, isAdmin, onStat
               <UsersIcon />
               <span>
                 {Array.isArray(assigned) && assigned.length
-                  ? `→ ${assigned.join(', ')}`
-                  : 'Route to'}
+                  ? `Routed: ${assigned.join(', ')}`
+                  : 'Route To Department'}
               </span>
             </div>
             <div className="lac-dept-pills">
@@ -274,36 +458,76 @@ const FeedCard = ({ feed, index, onExpand, assignedTo, onAssign, isAdmin, onStat
                   {dept}
                 </button>
               ))}
+              {resolvableIssueId && (
+                <button
+                  className="lac-dept-btn"
+                  disabled={resolvingIssue}
+                  onClick={handleResolveIssue}
+                >
+                  {resolvingIssue ? 'Resolving…' : 'Mark Resolved'}
+                </button>
+              )}
             </div>
           </div>
           {Array.isArray(feed.progress) && feed.progress.length > 0 && (
-            <div className="lac-progress-row">
+            <div className="lac-progress-timeline">
               {feed.progress.map((issue) => {
-                const deptCode = String(issue.assignedDepartment || '').toUpperCase()
-                const deptLabel =
-                  deptCode === 'POLICE' ? 'Police' :
-                  deptCode === 'FIRE' ? 'Fire' :
-                  deptCode === 'TRAFFIC' ? 'Traffic' :
-                  deptCode === 'MUNICIPAL' ? 'Municipal' :
-                  'Dept'
+                const deptLabel = getDepartmentLabel(issue.assignedDepartment)
                 const rawStatus = issue.status || 'Pending'
-                const niceStatus = rawStatus === 'Ongoing'
-                  ? 'In progress'
-                  : rawStatus === 'Resolved'
-                    ? 'Completed'
-                    : 'Received'
-                const lastLog = Array.isArray(issue.logs) && issue.logs.length
-                  ? issue.logs[issue.logs.length - 1]
-                  : null
-                const ts = lastLog?.createdAt || issue.updatedAt || issue.createdAt
-                const tsLabel = ts ? new Date(ts).toLocaleString('en-IN', { hour12: false }) : ''
-                const msg = lastLog?.message || `Status updated to ${niceStatus}`
+                const niceStatus = getStatusLabel(rawStatus)
+                const statusTone = getStatusTone(rawStatus)
+                const events = getIssueEvents(issue)
+                const lastTs = issue.updatedAt || issue.createdAt || events[events.length - 1]?.timestamp || null
+                const updatedLabel = lastTs
+                  ? new Date(lastTs).toLocaleString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false,
+                    })
+                  : ''
+
                 return (
-                  <div key={issue.issueId || issue._id} className="lac-progress-chip">
-                    <span className="lac-progress-chip-main">{deptLabel} · {niceStatus}</span>
-                    {tsLabel && <span className="lac-progress-chip-time">{tsLabel}</span>}
-                    {msg && <span className="lac-progress-chip-msg">{msg}</span>}
-                  </div>
+                  <section key={issue.issueId || issue._id} className="lac-issue-track">
+                    <div className="lac-track-head">
+                      <div className="lac-track-head-left">
+                        <span className="lac-track-dept">{deptLabel}</span>
+                        <span className={`lac-track-status lac-track-status-${statusTone}`}>{niceStatus}</span>
+                      </div>
+                      <div className="lac-track-head-right">
+                        {(issue.issueId || issue._id) && (
+                          <span className="lac-track-issueid">{issue.issueId || issue._id}</span>
+                        )}
+                        {updatedLabel && <span className="lac-track-updated">Updated {updatedLabel}</span>}
+                      </div>
+                    </div>
+
+                    <div className="lac-track-events">
+                      {events.map((event, eventIdx) => {
+                        const eventTime = event.timestamp
+                          ? new Date(event.timestamp).toLocaleTimeString('en-IN', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: false,
+                            })
+                          : ''
+
+                        return (
+                          <div key={`${issue.issueId || issue._id}-${eventIdx}`} className="lac-track-event">
+                            <span className={`lac-track-dot lac-track-dot-${statusTone}`} />
+                            <div className="lac-track-event-body">
+                              <p className="lac-track-event-msg">{event.message}</p>
+                              <div className="lac-track-event-meta">
+                                {event.actor && <span className="lac-track-event-actor">{event.actor}</span>}
+                                {eventTime && <span className="lac-track-event-time">{eventTime}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
                 )
               })}
             </div>
@@ -490,8 +714,17 @@ const FullscreenModal = ({ feed, onClose }) => {
 }
 
 // ─── Stats bar ────────────────────────────────────────────────────────────────
-const StatsBar = () => {
-  const [stats] = useState({ high: 0, med: 0, low: 0, total: 0 })
+const StatsBar = ({ feeds }) => {
+  const stats = feeds.reduce(
+    (acc, feed) => {
+      acc.total += 1
+      if (feed.severity === 'High') acc.high += 1
+      if (feed.severity === 'Medium') acc.med += 1
+      if (feed.severity === 'Low') acc.low += 1
+      return acc
+    },
+    { high: 0, med: 0, low: 0, total: 0 },
+  )
 
   return (
     <div className="lac-statsbar">
@@ -523,16 +756,32 @@ const StatsBar = () => {
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
-export default function LiveAlertsCommand({ session, refreshTick }) {
+export default function LiveAlertsCommand({ session, refreshTick, alertMode = 'all' }) {
   const [fullscreenFeed, setFullscreenFeed] = useState(null)
   const [assignedTo, setAssignedTo]         = useState({})
   const [filterSeverity, setFilterSeverity] = useState('All')
+  const [alertTypeFilter, setAlertTypeFilter] = useState('All Alerts')
   const [feeds, setFeeds]                   = useState([])
   const [loading, setLoading]               = useState(false)
   const [error, setError]                   = useState(null)
+  const [toastMessage, setToastMessage]     = useState('')
+  const [toastIcon, setToastIcon]           = useState(null)
+  const [showToast, setShowToast]           = useState(false)
   const effectiveSession = session || getSession()
   const roleUpperFromProp = String(effectiveSession?.user?.role || '').toUpperCase()
   const isAdmin = roleUpperFromProp === 'ADMIN'
+
+  useEffect(() => {
+    if (alertMode === 'hazard') {
+      setAlertTypeFilter('Hazard')
+      return
+    }
+    if (alertMode === 'garbage') {
+      setAlertTypeFilter('Garbage')
+      return
+    }
+    setAlertTypeFilter('All Alerts')
+  }, [alertMode])
 
   useEffect(() => {
     const localSession = getSession()
@@ -549,16 +798,44 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
         setError(null)
 
         if (roleUpper === 'ADMIN') {
-          // ADMIN view: live feeds from Cloudinary + routing status
-          const data = await api.getCloudinaryHazardVideos(token)
-          const baseFeeds = (data.videos || []).map((v, idx) => mapVideoToFeed({ ...v, folder: data.folder }, idx))
+          // ADMIN view: fetch all videos from dedicated type folders (with pagination).
+          const [weaponVideosRes, garbageVideosRes, hazardVideosRes, issuesRes] = await Promise.allSettled([
+            fetchAllPagedVideos((params) => api.getWeaponAlertVideos(token, params)),
+            fetchAllPagedVideos((params) => api.getGarbageAlertVideos(token, params)),
+            fetchAllPagedVideos((params) => api.getHazardAlertVideos(token, params)),
+            api.getAllIssues(token),
+          ])
+
+          const toVideoArray = (result) => {
+            if (result.status !== 'fulfilled') return []
+            return Array.isArray(result.value) ? result.value : []
+          }
+
+          const typedVideos = [
+            ...toVideoArray(weaponVideosRes).map((video) => ({ ...video, __kind: 'Weapon' })),
+            ...toVideoArray(garbageVideosRes).map((video) => ({ ...video, __kind: 'Garbage' })),
+            ...toVideoArray(hazardVideosRes).map((video) => ({ ...video, __kind: 'Hazard' })),
+          ]
+
+          const seen = new Set()
+          const addUnique = (list, video) => {
+            const key = String(video?.publicId || video?.secureUrl || `${list.length}`)
+            if (!key || seen.has(key)) return
+            seen.add(key)
+            list.push(video)
+          }
+
+          const combinedVideos = []
+          typedVideos.forEach((video) => addUnique(combinedVideos, video))
+
+          const baseFeeds = combinedVideos.map((video, idx) => {
+            const kind = video.__kind || detectVideoKind(video)
+            return mapVideoToFeed(video, idx, kind)
+          })
 
           let issues = []
-          try {
-            const issuesResp = await api.getAllIssues(token)
-            issues = Array.isArray(issuesResp?.issues) ? issuesResp.issues : []
-          } catch {
-            issues = []
+          if (issuesRes.status === 'fulfilled') {
+            issues = Array.isArray(issuesRes.value?.issues) ? issuesRes.value.issues : []
           }
 
           const evidenceMap = new Map()
@@ -609,15 +886,54 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
               nextAssignedTo[feed.id] = uiDepts
             }
 
-            const withHazard = match.hazardId ? { ...feed, hazardId: match.hazardId } : feed
+            let kind = feed.alertKind || 'Hazard'
+            const firstIssue = match.issues?.[0]
+            if (firstIssue) {
+              kind = detectAlertKind(firstIssue.hazardType)
+            }
+
+            const withHazard = match.hazardId ? { ...feed, hazardId: match.hazardId, alertKind: kind } : { ...feed, alertKind: kind }
             if (match.issues && match.issues.length) {
               return { ...withHazard, progress: match.issues }
             }
             return withHazard
           })
 
+          const knownEvidenceUrls = new Set(baseFeeds.map((feed) => feed.secureUrl).filter(Boolean))
+          const issueOnlyFeeds = issues
+            .filter((issue) => {
+              const url = String(issue.evidenceUrl || '')
+              if (!url) return true
+              return !knownEvidenceUrls.has(url)
+            })
+            .map((issue, idx) => mapIssueToFeed(issue, idx + nextFeeds.length))
+
+          issueOnlyFeeds.forEach((feed) => {
+            const issue = feed.progress?.[0]
+            const deptCode = String(issue?.assignedDepartment || '').toUpperCase()
+            if (!deptCode) return
+            const deptLabel = deptCode === 'POLICE'
+              ? 'Police'
+              : deptCode === 'FIRE'
+                ? 'Fire'
+                : deptCode === 'TRAFFIC'
+                  ? 'Traffic'
+                  : deptCode === 'MUNICIPAL'
+                    ? 'Municipal'
+                    : null
+            if (!deptLabel) return
+            const niceStatus = issue?.status === 'Ongoing'
+              ? 'In progress'
+              : issue?.status === 'Resolved'
+                ? 'Completed'
+                : 'Received'
+            nextAssignedTo[feed.id] = [`${deptLabel} (${niceStatus})`]
+          })
+
+          const combinedFeeds = [...nextFeeds, ...issueOnlyFeeds].sort((a, b) => a.detectedMs - b.detectedMs)
+
           if (!cancelled) {
-            setFeeds(nextFeeds)
+            setFeeds(combinedFeeds)
             setAssignedTo(nextAssignedTo)
           }
         } else {
@@ -631,27 +947,10 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
           }
 
           const issues = Array.isArray(data?.issues) ? data.issues : []
-          const deptFeeds = issues.map((issue, idx) => {
-            const createdAt = issue.createdAt ? new Date(issue.createdAt) : new Date()
-            const detectedMs = Date.now() - createdAt.getTime()
-
-            return {
-              id: issue.issueId || issue._id || `issue-${idx}`,
-              name: issue.hazardType || 'Routed incident',
-              location: issue.location?.address || 'MGM University – https://maps.app.goo.gl/DLummAEdNyswRA3b9',
-              detectedAgo: formatDetectedAgo(detectedMs),
-              detectedMs,
-              severity: issue.status === 'Pending' ? 'High' : issue.status === 'Ongoing' ? 'Medium' : 'Low',
-              channel: `CH-${String((idx % 32) + 1).padStart(2, '0')}`,
-              threat: 'Incident assigned to your department',
-              confidence: 92 + Math.floor(Math.random() * 7),
-              zone: `Zone ${String.fromCharCode(65 + (idx % 5))}`,
-              secureUrl: issue.evidenceUrl,
-              thumbnailUrl: null,
-              status: issue.status || 'Pending',
-              logs: Array.isArray(issue.logs) ? issue.logs : [],
-            }
-          })
+          const deptFeeds = issues.map((issue, idx) => ({
+            ...mapIssueToFeed(issue, idx),
+            threat: 'Incident assigned to your department',
+          }))
 
           if (!cancelled) {
             setFeeds(deptFeeds)
@@ -666,7 +965,9 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
     }
 
     fetchOnce()
-    const intervalId = setInterval(fetchOnce, 15000)
+    // Avoid exhausting Cloudinary API operation limits in admin view.
+    const intervalMs = roleUpper === 'ADMIN' ? 5 * 60 * 1000 : 15000
+    const intervalId = setInterval(fetchOnce, intervalMs)
 
     return () => {
       cancelled = true
@@ -700,10 +1001,16 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
       if (!hazardId) {
         let imported
         try {
+          const inferredType = targetFeed.alertKind === 'Weapon'
+            ? 'weapon'
+            : targetFeed.alertKind === 'Garbage'
+              ? 'garbage dumping'
+              : 'hazard'
+
           imported = await api.importCloudinaryHazard(token, {
             publicId: targetFeed.id,
             secureUrl: targetFeed.secureUrl,
-            type: 'fire',
+            type: inferredType,
             location: {
               address: targetFeed.location,
             },
@@ -732,7 +1039,11 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
         setFeeds(prev => prev.map(f => (f.id === targetFeed.id ? { ...f, hazardId } : f)))
       }
 
-      await api.routeHazard(token, hazardId, [backendRole])
+      await api.routeHazard(token, hazardId, backendRole)
+
+      setToastMessage(`Alert routed to ${dept} successfully.`)
+      setToastIcon(<CheckIcon />)
+      setShowToast(true)
 
       setAssignedTo(prev => {
         const current = prev[feedId] || []
@@ -741,6 +1052,9 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
       })
     } catch (err) {
       console.error('Failed to route hazard', err)
+      setToastMessage(err?.message || `Failed to route alert to ${dept}.`)
+      setToastIcon(<ErrorIcon />)
+      setShowToast(true)
     }
   }
 
@@ -776,9 +1090,96 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
     }
   }
 
-  const filtered = filterSeverity === 'All'
-    ? feeds
-    : feeds.filter(f => f.severity === filterSeverity)
+  const handleTriggerAlert = async (feed) => {
+    const session = getSession()
+    if (!session?.token || !session?.user?.role) return
+    const { token, user } = session
+
+    if (String(user.role).toUpperCase() !== 'ADMIN') return
+
+    const hazardType = feed.alertKind === 'Weapon' ? 'weapon' : 'hazard'
+    const coordinates = feed.coordinates && Number.isFinite(Number(feed.coordinates?.lat)) && Number.isFinite(Number(feed.coordinates?.lng))
+      ? { lat: Number(feed.coordinates.lat), lng: Number(feed.coordinates.lng) }
+      : undefined
+
+    try {
+      await api.testHazardAlert(token, {
+        hazardType,
+        location: feed.location,
+        description: `${feed.threat || 'Hazard detected'} from ${feed.name || 'Live feed'}`,
+        coordinates,
+      })
+
+      const locationName = feed.location ? String(feed.location).split('–')[0].trim() : 'this location'
+      const message = `Email sent to all registered citizens in ${locationName}`
+      
+      setToastMessage(message)
+      setToastIcon(<CheckIcon />)
+      setShowToast(true)
+    } catch (err) {
+      const errorMsg = err?.message || 'Failed to send alert email'
+      setToastMessage(errorMsg)
+      setToastIcon(<ErrorIcon />)
+      setShowToast(true)
+    }
+  }
+
+  const handleResolveIssueByAdmin = async (feed, issueId) => {
+    const session = getSession()
+    if (!session?.token || !session?.user?.role) return
+    const { token, user } = session
+
+    if (String(user.role).toUpperCase() !== 'ADMIN') return
+
+    try {
+      await api.resolveIssueByAdmin(token, {
+        issueId,
+        resolutionNote: 'Issue marked as resolved by admin command center',
+      })
+
+      const matchesIssue = (item) => {
+        if (String(item?.id || '') === String(issueId)) return true
+        if (String(item?.issueId || '') === String(issueId)) return true
+        if (Array.isArray(item?.progress)) {
+          return item.progress.some((issue) => String(issue?.issueId || issue?._id || '') === String(issueId))
+        }
+        return false
+      }
+
+      setFeeds((prev) => prev.filter((item) => !matchesIssue(item)))
+      setAssignedTo((prev) => {
+        const next = { ...prev }
+        delete next[feed.id]
+        return next
+      })
+
+      setToastMessage('Issue marked resolved and moved to Incident History.')
+      setToastIcon(<CheckIcon />)
+      setShowToast(true)
+    } catch (err) {
+      setToastMessage(err?.message || 'Failed to mark issue as resolved')
+      setToastIcon(<ErrorIcon />)
+      setShowToast(true)
+    }
+  }
+
+  const isResolvedFeed = (feed) => {
+    if (String(feed?.status || '').toUpperCase() === 'RESOLVED') return true
+    if (Array.isArray(feed?.progress) && feed.progress.length > 0) {
+      return feed.progress.every((issue) => String(issue?.status || '').toUpperCase() === 'RESOLVED')
+    }
+    return false
+  }
+
+  const activeFeeds = feeds.filter((feed) => !isResolvedFeed(feed))
+
+  const filteredBySeverity = filterSeverity === 'All'
+    ? activeFeeds
+    : activeFeeds.filter((feed) => feed.severity === filterSeverity)
+
+  const filtered = alertTypeFilter === 'All Alerts'
+    ? filteredBySeverity
+    : filteredBySeverity.filter((feed) => (feed.alertKind || 'Hazard') === alertTypeFilter)
 
   return (
     <>
@@ -790,11 +1191,11 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
           <div className="lac-page-header-left">
             <div className="lac-page-eyebrow">
               <ZapIcon />
-              <span>WEAPON DETECTION SYSTEM</span>
+              <span>MULTI ALERT COMMAND</span>
             </div>
             <h2 className="lac-page-title">Live Alert Command</h2>
             <p className="lac-page-desc">
-              AI-powered real-time threat detection across all surveillance nodes. Alerts are auto-classified and routed to responding departments.
+              AI-powered real-time alert detection with direct feeds for weapon, garbage, and hazard categories.
             </p>
           </div>
           {/* Filter pills */}
@@ -811,19 +1212,31 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
           </div>
         </div>
 
+        <div className="lac-filter-group" style={{ marginTop: -8 }}>
+          {ALERT_TYPE_OPTIONS.map((kind) => (
+            <button
+              key={kind}
+              className={`lac-filter-btn${alertTypeFilter === kind ? ' lac-filter-active' : ''}`}
+              onClick={() => setAlertTypeFilter(kind)}
+            >
+              {kind}
+            </button>
+          ))}
+        </div>
+
         {/* ── Stats bar ───────────────────────────── */}
-        <StatsBar />
+        <StatsBar feeds={filtered} />
 
         {/* ── Grid ────────────────────────────────── */}
         <div className="lac-grid">
-          {loading && feeds.length === 0 && (
-            <div className="lac-empty">Fetching live alerts from Cloudinary…</div>
+          {loading && activeFeeds.length === 0 && (
+            <div className="lac-empty">Fetching live alerts from Servers.....</div>
           )}
-          {error && !loading && feeds.length === 0 && (
+          {error && !loading && activeFeeds.length === 0 && (
             <div className="lac-empty">{error}</div>
           )}
           {!loading && !error && filtered.length === 0 && (
-            <div className="lac-empty">No live alerts available.</div>
+            <div className="lac-empty">No alerts available for the selected type.</div>
           )}
           {filtered.map((feed, i) => (
             <FeedCard
@@ -836,6 +1249,8 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
               isAdmin={isAdmin}
               onStatusChange={!isAdmin ? handleStatusChange : undefined}
               onSendMessage={!isAdmin ? handleSendMessage : undefined}
+              onTriggerAlert={isAdmin ? handleTriggerAlert : undefined}
+              onResolveIssue={isAdmin ? handleResolveIssueByAdmin : undefined}
             />
           ))}
         </div>
@@ -844,6 +1259,14 @@ export default function LiveAlertsCommand({ session, refreshTick }) {
         {fullscreenFeed && (
           <FullscreenModal feed={fullscreenFeed} onClose={() => setFullscreenFeed(null)} />
         )}
+
+        {/* ── Toast notification ──────────────────── */}
+        <Toast
+          message={toastMessage}
+          icon={toastIcon}
+          visible={showToast}
+          onClose={() => setShowToast(false)}
+        />
       </div>
     </>
   )
@@ -866,8 +1289,8 @@ const CSS = `
     --lac-text-primary: #0f172a;
     --lac-text-secondary:#475569;
     --lac-text-muted:   #94a3b8;
-    --lac-channel-bg:   rgba(99,102,241,0.1);
-    --lac-channel-color:#6366f1;
+    --lac-channel-bg:   rgba(255,153,51,0.16);
+    --lac-channel-color:#b45309;
     --lac-zone-bg:      rgba(15,23,42,0.06);
     --lac-zone-color:   #64748b;
     --lac-footer-bg:    rgba(241,245,249,0.7);
@@ -879,15 +1302,15 @@ const CSS = `
     --lac-dept-bg:      rgba(226,232,240,0.7);
     --lac-dept-border:  rgba(203,213,225,0.9);
     --lac-dept-text:    #64748b;
-    --lac-wave-bar:     rgba(99,102,241,0.35);
+    --lac-wave-bar:     rgba(19,136,8,0.35);
     --lac-stat-bg:      rgba(255,255,255,0.9);
     --lac-stat-border:  rgba(226,232,240,0.9);
     --lac-stat-divider: rgba(226,232,240,0.9);
     --lac-filter-bg:    rgba(241,245,249,0.9);
     --lac-filter-border:rgba(226,232,240,0.9);
     --lac-filter-text:  #64748b;
-    --lac-header-eyebrow: rgba(99,102,241,0.12);
-    --lac-header-eyebrow-text: #6366f1;
+    --lac-header-eyebrow: rgba(255,153,51,0.16);
+    --lac-header-eyebrow-text: #b45309;
     --lac-modal-bg:     rgba(255,255,255,0.96);
     --lac-modal-border: rgba(226,232,240,0.9);
     --lac-modal-shadow: 0 24px 80px rgba(15,23,42,0.2);
@@ -895,11 +1318,12 @@ const CSS = `
     --lac-telemetry:    rgba(255,255,255,0.85);
     --lac-telemetry-text:#334155;
     --lac-conf-track:   rgba(226,232,240,0.8);
-    --lac-scan-corner:  rgba(99,102,241,0.7);
+    --lac-scan-corner:  rgba(255,153,51,0.75);
     --lac-threat-box:   rgba(255,255,255,0);
     --lac-locate-btn-bg: rgba(241,245,249,0.9);
     --lac-locate-btn-border: rgba(226,232,240,0.9);
     --lac-locate-btn-text: #475569;
+    --lac-action-text-strong: #0b1220;
   }
 
   [data-jatayu-theme="dark"] {
@@ -912,8 +1336,8 @@ const CSS = `
     --lac-text-primary: #f1f5f9;
     --lac-text-secondary:#94a3b8;
     --lac-text-muted:   #475569;
-    --lac-channel-bg:   rgba(99,102,241,0.15);
-    --lac-channel-color:#818cf8;
+    --lac-channel-bg:   rgba(255,153,51,0.18);
+    --lac-channel-color:#ffd8a8;
     --lac-zone-bg:      rgba(255,255,255,0.05);
     --lac-zone-color:   #64748b;
     --lac-footer-bg:    rgba(255,255,255,0.025);
@@ -925,15 +1349,15 @@ const CSS = `
     --lac-dept-bg:      rgba(255,255,255,0.04);
     --lac-dept-border:  rgba(255,255,255,0.07);
     --lac-dept-text:    #475569;
-    --lac-wave-bar:     rgba(99,102,241,0.5);
+    --lac-wave-bar:     rgba(34,197,94,0.55);
     --lac-stat-bg:      rgba(13,17,27,0.8);
     --lac-stat-border:  rgba(255,255,255,0.06);
     --lac-stat-divider: rgba(255,255,255,0.05);
     --lac-filter-bg:    rgba(255,255,255,0.04);
     --lac-filter-border:rgba(255,255,255,0.07);
     --lac-filter-text:  #475569;
-    --lac-header-eyebrow: rgba(99,102,241,0.15);
-    --lac-header-eyebrow-text: #818cf8;
+    --lac-header-eyebrow: rgba(255,153,51,0.2);
+    --lac-header-eyebrow-text: #ffd8a8;
     --lac-modal-bg:     rgba(10,14,24,0.97);
     --lac-modal-border: rgba(255,255,255,0.07);
     --lac-modal-shadow: 0 32px 100px rgba(0,0,0,0.7);
@@ -941,11 +1365,12 @@ const CSS = `
     --lac-telemetry:    rgba(0,0,0,0.6);
     --lac-telemetry-text:rgba(99,255,180,0.8);
     --lac-conf-track:   rgba(255,255,255,0.07);
-    --lac-scan-corner:  rgba(99,102,241,0.9);
+    --lac-scan-corner:  rgba(255,153,51,0.95);
     --lac-threat-box:   rgba(255,255,255,0);
     --lac-locate-btn-bg: rgba(255,255,255,0.04);
     --lac-locate-btn-border: rgba(255,255,255,0.08);
     --lac-locate-btn-text: #64748b;
+    --lac-action-text-strong: #f8fafc;
   }
 
   /* ── KEYFRAMES ───────────────────────────────── */
@@ -1080,10 +1505,10 @@ const CSS = `
     color: var(--lac-text-primary);
   }
   .lac-filter-active {
-    background: #6366f1 !important;
-    border-color: #6366f1 !important;
+    background: #ff9933 !important;
+    border-color: #ff9933 !important;
     color: #fff !important;
-    box-shadow: 0 2px 12px rgba(99,102,241,0.35);
+    box-shadow: 0 2px 12px rgba(255,153,51,0.4);
   }
 
   /* ── STATS BAR ───────────────────────────────── */
@@ -1204,6 +1629,27 @@ const CSS = `
     letter-spacing: 0.5px;
     transition: all 0.3s;
   }
+  .lac-kind-chip {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(239,68,68,0.3);
+    background: rgba(239,68,68,0.12);
+    color: #ef4444;
+    text-transform: uppercase;
+    letter-spacing: 0.35px;
+  }
+  .lac-kind-chip.lac-kind-weapon {
+    border-color: rgba(255,153,51,0.4);
+    background: rgba(255,153,51,0.16);
+    color: #b45309;
+  }
+  .lac-kind-garbage {
+    border-color: rgba(249,115,22,0.3);
+    background: rgba(249,115,22,0.12);
+    color: #f97316;
+  }
   .lac-zone {
     font-size: 10px;
     font-weight: 600;
@@ -1264,26 +1710,29 @@ const CSS = `
     background-size: 150px 150px;
     z-index: 1;
     animation: lac-noise-anim 0.15s steps(1) infinite;
-  
+  }
+
   .lac-video {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-  }
+    z-index: 2;
   }
 
   /* Simulated CCTV feed background */
   .lac-feed-bg {
-    background: #020617;
+    position: absolute;
     inset: 0;
+    background: #020617;
     background:
       linear-gradient(180deg, rgba(30,40,60,0.3) 0%, rgba(10,15,25,0.6) 100%),
       repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,255,120,0.015) 3px, rgba(0,255,120,0.015) 4px);
     z-index: 0;
     animation: lac-grid-flicker 4s ease-in-out infinite;
-  
+  }
+
   .lac-video-full {
     position: absolute;
     inset: 0;
@@ -1291,7 +1740,7 @@ const CSS = `
     height: 100%;
     object-fit: cover;
     background: #000;
-  }
+    z-index: 2;
   }
 
   /* ── SCAN OVERLAY ────────────────────────────── */
@@ -1415,9 +1864,9 @@ const CSS = `
     transition: all 0.2s ease;
   }
   .lac-expand-btn:hover {
-    background: rgba(99,102,241,0.7);
+    background: rgba(255,153,51,0.78);
     color: #fff;
-    border-color: rgba(99,102,241,0.5);
+    border-color: rgba(255,153,51,0.6);
   }
 
   /* ── THREAT INFO ─────────────────────────────── */
@@ -1496,12 +1945,12 @@ const CSS = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 10px;
   }
   .lac-footer-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
   }
   .lac-detected-ago {
     font-size: 11px;
@@ -1512,21 +1961,24 @@ const CSS = `
   .lac-locate-btn {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 5px 10px;
-    border-radius: 7px;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 8px;
     border: 1px solid var(--lac-locate-btn-border);
     background: var(--lac-locate-btn-bg);
-    color: var(--lac-locate-btn-text);
-    font-size: 11px;
-    font-weight: 600;
+    color: var(--lac-action-text-strong);
+    font-size: 12.5px;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.2s ease;
     font-family: 'Outfit', sans-serif;
+    letter-spacing: 0.15px;
+    line-height: 1;
+    min-height: 34px;
   }
   .lac-locate-btn:hover {
     background: var(--lac-btn-hover-bg);
-    color: var(--lac-text-primary);
+    color: var(--lac-action-text-strong);
   }
 
   /* ── WAVEFORM ────────────────────────────────── */
@@ -1545,59 +1997,63 @@ const CSS = `
   }
   .lac-wave-active .lac-wave-bar {
     animation: lac-wave-bar 0.7s ease-in-out infinite;
-    background: #6366f1;
+    background: #138808;
   }
 
   /* ── ASSIGN ROW ──────────────────────────────── */
   .lac-assign-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex-wrap: wrap;
-    padding-top: 8px;
+    padding-top: 10px;
     border-top: 1px solid var(--lac-footer-border);
     transition: border-color 0.3s;
   }
   .lac-assign-label {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 10.5px;
-    color: var(--lac-text-muted);
-    font-weight: 600;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--lac-action-text-strong);
+    font-weight: 700;
     white-space: nowrap;
     flex-shrink: 0;
     transition: color 0.3s;
+    letter-spacing: 0.2px;
   }
   .lac-dept-pills {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 6px;
     flex: 1;
     justify-content: flex-end;
   }
   .lac-dept-btn {
-    padding: 3px 9px;
-    border-radius: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
     border: 1px solid var(--lac-dept-border);
     background: var(--lac-dept-bg);
-    color: var(--lac-dept-text);
-    font-size: 10.5px;
-    font-weight: 600;
+    color: var(--lac-action-text-strong);
+    font-size: 12.5px;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.2s ease;
     font-family: 'Outfit', sans-serif;
+    letter-spacing: 0.2px;
+    line-height: 1;
+    min-height: 34px;
   }
   .lac-dept-btn:hover {
     background: var(--lac-btn-hover-bg);
-    color: var(--lac-text-primary);
-    border-color: rgba(99,102,241,0.3);
+    color: var(--lac-action-text-strong);
+    border-color: rgba(255,153,51,0.45);
   }
   .lac-dept-active {
-    background: #6366f1 !important;
-    border-color: #6366f1 !important;
+    background: #138808 !important;
+    border-color: #138808 !important;
     color: #fff !important;
-    box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+    box-shadow: 0 2px 8px rgba(19,136,8,0.42);
   }
   .lac-dept-status-active {
     background: linear-gradient(135deg, rgba(56,189,248,0.16), rgba(34,197,94,0.2)) !important;
@@ -1606,32 +2062,154 @@ const CSS = `
     box-shadow: 0 0 0 1px rgba(56,189,248,0.5);
   }
 
-  .lac-progress-row {
+  .lac-progress-timeline {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--lac-footer-border);
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px dashed var(--lac-footer-border);
+    gap: 10px;
   }
-  .lac-progress-chip {
+  .lac-issue-track {
+    border: 1px solid var(--lac-footer-border);
+    background: linear-gradient(180deg, rgba(255,153,51,0.09), rgba(19,136,8,0.05));
+    border-radius: 12px;
+    padding: 10px 11px;
+  }
+  .lac-track-head {
     display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 9px;
     flex-wrap: wrap;
-    gap: 4px 8px;
-    align-items: baseline;
-    font-size: 10px;
-    color: var(--lac-text-muted);
   }
-  .lac-progress-chip-main {
+  .lac-track-head-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .lac-track-head-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .lac-track-dept {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--lac-text-primary);
+    letter-spacing: 0.2px;
+  }
+  .lac-track-status {
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 3px 8px;
+    border: 1px solid transparent;
+  }
+  .lac-track-status-pending {
+    color: #b45309;
+    background: rgba(245,158,11,0.16);
+    border-color: rgba(245,158,11,0.35);
+  }
+  .lac-track-status-active {
+    color: #0369a1;
+    background: rgba(14,165,233,0.16);
+    border-color: rgba(14,165,233,0.35);
+  }
+  .lac-track-status-done {
+    color: #166534;
+    background: rgba(34,197,94,0.16);
+    border-color: rgba(34,197,94,0.35);
+  }
+  .lac-track-issueid {
+    font-size: 10.5px;
+    font-family: 'Space Mono', monospace;
+    color: var(--lac-text-muted);
+    background: rgba(148,163,184,0.15);
+    border: 1px solid rgba(148,163,184,0.24);
+    border-radius: 6px;
+    padding: 2px 6px;
+  }
+  .lac-track-updated {
+    font-size: 11px;
     font-weight: 600;
     color: var(--lac-text-secondary);
   }
-  .lac-progress-chip-time {
-    font-family: 'Space Mono', monospace;
-    opacity: 0.8;
+  .lac-track-events {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    position: relative;
+    margin-left: 2px;
   }
-  .lac-progress-chip-msg {
-    opacity: 0.9;
+  .lac-track-events::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    bottom: 2px;
+    width: 2px;
+    background: linear-gradient(180deg, rgba(19,136,8,0.45), rgba(255,153,51,0.2));
+    border-radius: 99px;
+  }
+  .lac-track-event {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    position: relative;
+    z-index: 1;
+  }
+  .lac-track-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.85);
+  }
+  .lac-track-dot-pending {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245,158,11,0.25);
+  }
+  .lac-track-dot-active {
+    background: #0ea5e9;
+    box-shadow: 0 0 0 2px rgba(14,165,233,0.25);
+  }
+  .lac-track-dot-done {
+    background: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34,197,94,0.25);
+  }
+  .lac-track-event-body {
+    flex: 1;
+    min-width: 0;
+    padding-bottom: 2px;
+  }
+  .lac-track-event-msg {
+    margin: 0;
+    color: var(--lac-text-primary);
+    font-size: 12.5px;
+    line-height: 1.45;
+    font-weight: 600;
+  }
+  .lac-track-event-meta {
+    margin-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    align-items: center;
+  }
+  .lac-track-event-actor {
+    font-size: 11px;
+    font-weight: 700;
+    color: #2563eb;
+  }
+  .lac-track-event-time {
+    font-size: 10.5px;
+    font-family: 'Space Mono', monospace;
+    color: var(--lac-text-muted);
   }
 
   .lac-msg-timeline {
@@ -1850,5 +2428,55 @@ const CSS = `
     color: var(--lac-text-primary);
     font-family: 'Space Mono', monospace;
     transition: color 0.3s;
+  }
+
+  /* ── TOAST NOTIFICATION ──────────────────────── */
+  .lac-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border-radius: 10px;
+    background: rgba(13, 17, 27, 0.95);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: lac-toast-slide-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+    transition: opacity 0.3s ease;
+  }
+
+  @keyframes lac-toast-slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  .lac-toast-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #10b981;
+  }
+
+  .lac-toast-message {
+    font-size: 13px;
+    font-weight: 500;
+    color: #f1f5f9;
+    font-family: 'Outfit', sans-serif;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
   }
 `

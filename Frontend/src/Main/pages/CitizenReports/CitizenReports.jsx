@@ -8,10 +8,10 @@ const CATEGORY_OPTIONS = ['garbage', 'road issue', 'environment', 'electricity']
 
 
 function statusTone(status) {
-  if (status === 'Resolved') return { bg: 'rgba(16,185,129,0.12)', text: '#059669', border: 'rgba(16,185,129,0.25)' }
-  if (status === 'Routed') return { bg: 'rgba(59,130,246,0.12)', text: '#2563eb', border: 'rgba(59,130,246,0.25)' }
-  if (status === 'Under Review') return { bg: 'rgba(245,158,11,0.12)', text: '#d97706', border: 'rgba(245,158,11,0.25)' }
-  return { bg: 'rgba(239,68,68,0.1)', text: '#dc2626', border: 'rgba(239,68,68,0.2)' }
+  if (status === 'Resolved') return { bg: 'rgba(19,136,8,0.16)', text: '#166534', border: 'rgba(19,136,8,0.35)' }
+  if (status === 'Routed') return { bg: 'rgba(255,153,51,0.16)', text: '#9a3412', border: 'rgba(255,153,51,0.35)' }
+  if (status === 'Under Review') return { bg: 'rgba(255,153,51,0.1)', text: '#c2410c', border: 'rgba(255,153,51,0.28)' }
+  return { bg: 'rgba(220,38,38,0.1)', text: '#b91c1c', border: 'rgba(220,38,38,0.24)' }
 }
 
 function parseLocation(description) {
@@ -42,6 +42,7 @@ export default function CitizenReports() {
   const [categoryDraftById, setCategoryDraftById] = useState({})
   const [busyById, setBusyById] = useState({})
   const [expandedComplaintId, setExpandedComplaintId] = useState(null)
+  const [previewMedia, setPreviewMedia] = useState(null)
 
   const loadComplaints = useCallback(async () => {
     if (!token) {
@@ -117,6 +118,9 @@ export default function CitizenReports() {
   const setBusy = (id, value) => {
     setBusyById((prev) => ({ ...prev, [id]: value }))
   }
+
+  const isImageMedia = (media) => String(media?.type || '').toLowerCase() === 'image'
+  const isVideoMedia = (media) => String(media?.type || '').toLowerCase() === 'video'
 
   const handleStatusUpdate = async (complaintId) => {
     const nextStatus = statusDraftById[complaintId]
@@ -241,9 +245,25 @@ export default function CitizenReports() {
                     {Array.isArray(item.media) && item.media.length > 0 ? (
                       <div className="cit-media-row">
                         {item.media.slice(0, 5).map((m, idx) => (
-                          <a key={`${item.complaintId}-media-${idx}`} href={m.url} target="_blank" rel="noreferrer" className="cit-media-chip">
-                            {m.type}
-                          </a>
+                          <button
+                            type="button"
+                            key={`${item.complaintId}-media-${idx}`}
+                            className="cit-media-tile"
+                            onClick={() => setPreviewMedia({
+                              url: m.url,
+                              type: String(m.type || '').toLowerCase(),
+                              title: item.title || item.complaintId,
+                            })}
+                          >
+                            {isImageMedia(m) ? (
+                              <img src={m.url} alt={item.title || 'Complaint media'} className="cit-media-thumb" />
+                            ) : isVideoMedia(m) ? (
+                              <div className="cit-media-video-placeholder">VIDEO</div>
+                            ) : (
+                              <div className="cit-media-video-placeholder">MEDIA</div>
+                            )}
+                            <span className="cit-media-chip">{m.type}</span>
+                          </button>
                         ))}
                       </div>
                     ) : null}
@@ -335,6 +355,24 @@ export default function CitizenReports() {
             )
           })}
         </section>
+
+        {previewMedia ? (
+          <div className="cit-media-modal-backdrop" onClick={() => setPreviewMedia(null)}>
+            <div className="cit-media-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="cit-media-modal-head">
+                <strong>{previewMedia.title || 'Media preview'}</strong>
+                <button type="button" className="cit-media-close" onClick={() => setPreviewMedia(null)}>Close</button>
+              </div>
+              <div className="cit-media-modal-body">
+                {previewMedia.type === 'image' ? (
+                  <img src={previewMedia.url} alt={previewMedia.title || 'Complaint image'} className="cit-media-modal-image" />
+                ) : (
+                  <video src={previewMedia.url} controls className="cit-media-modal-video" />
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </>
   )
@@ -361,8 +399,12 @@ function Detail({ label, value }) {
 const PAGE_CSS = `
   .cit-reports-root {
     display: grid;
-    gap: 14px;
+    gap: 16px;
     font-family: 'DM Sans', system-ui, sans-serif;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(255,153,51,0.08), transparent 42%),
+      radial-gradient(circle at 100% 100%, rgba(19,136,8,0.08), transparent 46%);
+    padding: 2px;
   }
 
   .cit-head {
@@ -371,44 +413,46 @@ const PAGE_CSS = `
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 16px;
-    padding: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #fffdf8 100%);
+    border: 1px solid rgba(255,153,51,0.22);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
   }
 
-  .cit-kicker { margin: 0; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
-  .cit-title { margin: 6px 0 0; font-size: 22px; font-weight: 800; color: #0f172a; }
-  .cit-subtitle { margin: 6px 0 0; font-size: 13px; color: #64748b; max-width: 760px; line-height: 1.5; }
+  .cit-kicker { margin: 0; font-size: 12px; font-weight: 800; color: #c2410c; text-transform: uppercase; letter-spacing: .7px; }
+  .cit-title { margin: 7px 0 0; font-size: 27px; font-weight: 900; color: #0f172a; letter-spacing: -0.3px; }
+  .cit-subtitle { margin: 8px 0 0; font-size: 15px; color: #334155; max-width: 760px; line-height: 1.65; font-weight: 500; }
 
   .cit-refresh {
-    border: 1px solid #dbe3f0;
-    background: #f8fafc;
-    color: #0f172a;
-    border-radius: 10px;
-    padding: 8px 12px;
-    font-size: 12px;
-    font-weight: 700;
+    border: 1px solid rgba(255,153,51,0.35);
+    background: #fff7ed;
+    color: #9a3412;
+    border-radius: 11px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 800;
     cursor: pointer;
   }
+  .cit-refresh:hover { background: #ffedd5; }
 
   .cit-metrics {
     display: grid;
     grid-template-columns: repeat(5, minmax(0,1fr));
-    gap: 10px;
+    gap: 11px;
   }
 
   .cit-metric {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 10px 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid rgba(19,136,8,0.18);
+    border-radius: 13px;
+    padding: 12px 13px;
     display: grid;
-    gap: 3px;
+    gap: 4px;
   }
 
-  .cit-metric span { font-size: 11px; color: #64748b; font-weight: 700; }
-  .cit-metric strong { font-size: 20px; color: #0f172a; line-height: 1; }
+  .cit-metric span { font-size: 12px; color: #475569; font-weight: 800; }
+  .cit-metric strong { font-size: 24px; color: #0f172a; line-height: 1; }
 
   .cit-filters {
     display: flex;
@@ -417,32 +461,33 @@ const PAGE_CSS = `
   }
 
   .cit-filter-btn {
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgba(255,153,51,0.25);
     background: #ffffff;
     color: #334155;
     border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 700;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 800;
     cursor: pointer;
   }
 
   .cit-filter-active {
-    background: #0f172a;
+    background: #ff9933;
     color: #ffffff;
-    border-color: #0f172a;
+    border-color: #ff9933;
   }
 
   .cit-feedback, .cit-error, .cit-empty, .cit-readonly {
     background: #ffffff;
-    border: 1px solid #e5e7eb;
+    border: 1px solid rgba(203,213,225,0.95);
     border-radius: 12px;
-    padding: 10px 12px;
-    font-size: 12px;
+    padding: 11px 13px;
+    font-size: 13px;
+    font-weight: 600;
   }
-  .cit-error { border-color: #f5c2c2; color: #b42318; }
-  .cit-feedback { border-color: #b8e0c8; color: #0f7a40; }
-  .cit-readonly { color: #64748b; margin-top: 10px; }
+  .cit-error { border-color: rgba(220,38,38,0.28); color: #b42318; }
+  .cit-feedback { border-color: rgba(19,136,8,0.35); color: #166534; }
+  .cit-readonly { color: #334155; margin-top: 10px; }
 
   .cit-list {
     display: grid;
@@ -450,12 +495,12 @@ const PAGE_CSS = `
   }
 
   .cit-card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
+    background: linear-gradient(180deg, #ffffff 0%, #fffdf8 100%);
+    border: 1px solid rgba(255,153,51,0.18);
     border-radius: 16px;
-    padding: 14px;
+    padding: 15px;
     display: grid;
-    gap: 10px;
+    gap: 11px;
   }
 
   .cit-card-expanded {
@@ -484,9 +529,9 @@ const PAGE_CSS = `
 
   .cit-card-sub {
     margin: 4px 0 0;
-    font-size: 11px;
-    color: #64748b;
-    font-weight: 600;
+    font-size: 12px;
+    color: #475569;
+    font-weight: 700;
   }
 
   .cit-chevron {
@@ -509,14 +554,14 @@ const PAGE_CSS = `
     flex-wrap: wrap;
   }
 
-  .cit-id { margin: 0; font-size: 11px; color: #64748b; font-weight: 700; }
-  .cit-card-title { margin: 4px 0 0; font-size: 16px; color: #0f172a; font-weight: 800; }
+  .cit-id { margin: 0; font-size: 12px; color: #64748b; font-weight: 800; }
+  .cit-card-title { margin: 4px 0 0; font-size: 18px; color: #0f172a; font-weight: 900; }
 
   .cit-status {
     border: 1px solid transparent;
     border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 11px;
+    padding: 5px 11px;
+    font-size: 12px;
     font-weight: 800;
     text-transform: uppercase;
   }
@@ -528,52 +573,146 @@ const PAGE_CSS = `
   }
 
   .cit-detail {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: #fff;
+    border: 1px solid rgba(19,136,8,0.2);
     border-radius: 10px;
-    padding: 8px 10px;
+    padding: 10px 11px;
     display: grid;
-    gap: 3px;
+    gap: 4px;
   }
 
-  .cit-detail span { font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
-  .cit-detail strong { font-size: 12px; color: #1e293b; font-weight: 700; line-height: 1.4; }
+  .cit-detail span { font-size: 11px; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: .45px; }
+  .cit-detail strong { font-size: 13px; color: #1e293b; font-weight: 800; line-height: 1.45; }
 
   .cit-description {
     margin: 0;
-    font-size: 13px;
-    color: #475569;
-    line-height: 1.6;
+    font-size: 14px;
+    color: #334155;
+    line-height: 1.7;
+    font-weight: 500;
   }
 
   .cit-media-row {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     flex-wrap: wrap;
+  }
+
+  .cit-media-tile {
+    width: 88px;
+    border: 1px solid #dbeafe;
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 6px;
+    display: grid;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .cit-media-thumb,
+  .cit-media-video-placeholder {
+    width: 100%;
+    height: 62px;
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    object-fit: cover;
+    background: #eff6ff;
+  }
+
+  .cit-media-video-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1d4ed8;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .4px;
   }
 
   .cit-media-chip {
     text-decoration: none;
-    border: 1px solid #dbeafe;
-    background: #eff6ff;
-    color: #1d4ed8;
+    border: 1px solid rgba(255,153,51,0.3);
+    background: rgba(255,153,51,0.14);
+    color: #9a3412;
     border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 11px;
+    padding: 3px 8px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: capitalize;
+    justify-self: start;
+  }
+
+  .cit-media-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+
+  .cit-media-modal {
+    width: min(920px, 96vw);
+    max-height: 88vh;
+    background: #ffffff;
+    border: 1px solid #dbe3f0;
+    border-radius: 14px;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+
+  .cit-media-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    color: #0f172a;
+    font-size: 13px;
+  }
+
+  .cit-media-close {
+    border: 1px solid rgba(255,153,51,0.32);
+    background: #fff7ed;
+    color: #0f172a;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .cit-media-modal-body {
+    padding: 10px;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+  }
+
+  .cit-media-modal-image,
+  .cit-media-modal-video {
+    max-width: 100%;
+    max-height: 72vh;
+    border-radius: 10px;
+    border: 1px solid #dbe3f0;
+    background: #000;
   }
 
   .cit-divider { height: 1px; background: #edf2f7; }
-  .cit-progress-head { font-size: 11px; font-weight: 800; color: #475569; letter-spacing: .5px; text-transform: uppercase; }
+  .cit-progress-head { font-size: 12px; font-weight: 800; color: #334155; letter-spacing: .5px; text-transform: uppercase; }
 
   .cit-log-list { display: grid; gap: 8px; }
   .cit-log-item { display: grid; grid-template-columns: 8px 1fr; gap: 8px; }
   .cit-log-dot { width: 7px; height: 7px; border-radius: 50%; background: #138044; margin-top: 6px; }
-  .cit-log-action { font-size: 12px; font-weight: 800; color: #0f172a; }
-  .cit-log-message { margin-top: 2px; font-size: 12px; color: #475569; line-height: 1.45; }
-  .cit-log-time { margin-top: 2px; font-size: 11px; color: #94a3b8; }
-  .cit-no-log { font-size: 12px; color: #94a3b8; font-style: italic; }
+  .cit-log-action { font-size: 13px; font-weight: 800; color: #0f172a; }
+  .cit-log-message { margin-top: 2px; font-size: 13px; color: #334155; line-height: 1.5; }
+  .cit-log-time { margin-top: 2px; font-size: 12px; color: #64748b; }
+  .cit-no-log { font-size: 13px; color: #64748b; font-style: italic; }
 
   .cit-actions-panel {
     display: grid;
@@ -582,17 +721,17 @@ const PAGE_CSS = `
   }
 
   .cit-action-group {
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgba(19,136,8,0.2);
     border-radius: 10px;
     padding: 10px;
-    background: #f8fafc;
+    background: #ffffff;
   }
 
   .cit-action-group label {
     display: block;
     margin-bottom: 8px;
-    font-size: 11px;
-    color: #475569;
+    font-size: 12px;
+    color: #334155;
     font-weight: 800;
     letter-spacing: .4px;
     text-transform: uppercase;
@@ -607,18 +746,18 @@ const PAGE_CSS = `
   .cit-action-row select,
   .cit-action-row button {
     border-radius: 8px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid rgba(203,213,225,0.95);
     background: #ffffff;
     color: #0f172a;
-    padding: 7px 10px;
-    font-size: 12px;
+    padding: 8px 11px;
+    font-size: 13px;
     font-weight: 700;
   }
 
   .cit-action-row button {
     cursor: pointer;
-    background: #0f172a;
-    border-color: #0f172a;
+    background: #138808;
+    border-color: #138808;
     color: #ffffff;
   }
 

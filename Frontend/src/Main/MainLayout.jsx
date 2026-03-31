@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import Sidebar from './Sidebar.jsx'
 import { api } from '../lib/api.js'
 import LiveAlertsCommand from './pages/LiveAlertsCommand/LiveAlertsCommand.jsx'
@@ -12,7 +12,9 @@ import Settings from './pages/Settings/Settings.jsx'
 
 // ─── Page registry ────────────────────────────────────────────────────────────
 const PAGES = {
-  'live-alerts':        { component: LiveAlertsCommand, label: 'Live Alerts Command',  sub: 'Real-time incident tracking across all districts' },
+  'live-alerts':        { component: LiveAlertsCommand, label: 'Live Alerts Command',  sub: 'Real-time incident tracking across all districts', props: { alertMode: 'all' } },
+  'hazard-alerts':      { component: LiveAlertsCommand, label: 'Hazard Alerts',        sub: 'All non-garbage hazard alerts and operational status', props: { alertMode: 'hazard' } },
+  'garbage-alerts':     { component: LiveAlertsCommand, label: 'Garbage Alerts',       sub: 'Waste-specific alerts and their departmental progress', props: { alertMode: 'garbage' } },
   'garbage-monitoring': { component: GarbageMonitoring, label: 'Waste Monitoring',      sub: 'Municipal sanitation coverage and complaint tracking' },
   'citizen-reports':    { component: CitizenReports,    label: 'Citizen Reports',       sub: 'Incoming civic issues filed by the public' },
   'camera-network':     { component: CameraNetwork,     label: 'Camera Network',        sub: 'CCTV feeds and surveillance infrastructure' },
@@ -118,13 +120,12 @@ const PageTransition = ({ children, pageKey }) => {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    setVisible(false)
     const t = setTimeout(() => setVisible(true), 30)
     return () => clearTimeout(t)
-  }, [pageKey])
+  }, [])
 
   return (
-    <div className={`ml-page-transition${visible ? ' ml-page-visible' : ''}`}>
+    <div key={pageKey} className={`ml-page-transition${visible ? ' ml-page-visible' : ''}`}>
       {children}
     </div>
   )
@@ -157,7 +158,7 @@ export default function MainLayout({ session, onLogout = () => {} }) {
     : 'JA'
 
   const isAdmin = userRole === 'ADMIN'
-  const restrictedForNonAdmin = new Set(['garbage-monitoring', 'department-panel', 'analytics'])
+  const restrictedForNonAdmin = new Set(['hazard-alerts', 'garbage-alerts', 'garbage-monitoring', 'department-panel', 'analytics'])
   const allowedPageIds = Object.keys(PAGES).filter(id => isAdmin || !restrictedForNonAdmin.has(id))
 
   // Ensure activePage is always one of the allowed pages for this role
@@ -191,6 +192,11 @@ export default function MainLayout({ session, onLogout = () => {} }) {
       return Array.isArray(rows) ? rows : []
     }
 
+    const isGarbageIssue = (issue) => {
+      const hazardType = String(issue?.hazardType || '').toLowerCase()
+      return hazardType.includes('garbage') || hazardType.includes('waste') || hazardType.includes('litter')
+    }
+
     const unresolvedIssueCount = (issues) =>
       issues.filter((issue) => String(issue.status || '').toUpperCase() !== 'RESOLVED').length
 
@@ -200,20 +206,75 @@ export default function MainLayout({ session, onLogout = () => {} }) {
     const loadBadgeCounts = async () => {
       try {
         if (role === 'ADMIN') {
-          const [issuesRes, videosRes, complaintsRes] = await Promise.allSettled([
+          const [issuesRes, weaponVideosRes, garbageVideosRes, hazardVideosRes, complaintsRes] = await Promise.allSettled([
             api.getAllIssues(token),
-            api.getCloudinaryHazardVideos(token),
+            api.getWeaponAlertVideos(token),
+            api.getGarbageAlertVideos(token),
+            api.getHazardAlertVideos(token),
             api.getAllComplaints(token),
           ])
 
           const issues = readArray(issuesRes, 'issues')
           const complaints = readArray(complaintsRes, 'complaints')
-          const videos = readArray(videosRes, 'videos')
+
+          const typedVideos = [
+            ...readArray(weaponVideosRes, 'videos').map((video) => ({ ...video, __kind: 'Weapon' })),
+            ...readArray(garbageVideosRes, 'videos').map((video) => ({ ...video, __kind: 'Garbage' })),
+            ...readArray(hazardVideosRes, 'videos').map((video) => ({ ...video, __kind: 'Hazard' })),
+          ]
+
+          const seenVideoIds = new Set()
+          const uniqueVideos = []
+          for (const video of typedVideos) {
+            const key = String(video?.publicId || video?.secureUrl || '').trim()
+            if (!key || seenVideoIds.has(key)) continue
+            seenVideoIds.add(key)
+            uniqueVideos.push(video)
+          }
+
+          const issuesByEvidence = new Map()
+          for (const issue of issues) {
+            const url = String(issue?.evidenceUrl || '').trim()
+            if (!url) continue
+            if (!issuesByEvidence.has(url)) {
+              issuesByEvidence.set(url, [])
+            }
+            issuesByEvidence.get(url).push(issue)
+          }
+
+          const activeVideoFeeds = uniqueVideos.filter((video) => {
+            const url = String(video?.secureUrl || '').trim()
+            const linkedIssues = url ? (issuesByEvidence.get(url) || []) : []
+
+            if (!linkedIssues.length) return true
+            return linkedIssues.some((issue) => String(issue?.status || '').toUpperCase() !== 'RESOLVED')
+          })
+
+          const knownEvidenceUrls = new Set(activeVideoFeeds.map((video) => String(video?.secureUrl || '').trim()).filter(Boolean))
+          const activeIssueOnlyFeeds = issues.filter((issue) => {
+            const status = String(issue?.status || '').toUpperCase()
+            if (status === 'RESOLVED') return false
+            const url = String(issue?.evidenceUrl || '').trim()
+            if (!url) return true
+            return !knownEvidenceUrls.has(url)
+          })
+
+          const activeHazardFromVideos = activeVideoFeeds.filter((video) => video.__kind !== 'Garbage').length
+          const activeGarbageFromVideos = activeVideoFeeds.filter((video) => video.__kind === 'Garbage').length
+
+          const activeHazardFromIssues = activeIssueOnlyFeeds.filter((issue) => !isGarbageIssue(issue)).length
+          const activeGarbageFromIssues = activeIssueOnlyFeeds.filter((issue) => isGarbageIssue(issue)).length
+
+          const liveAlertCount = activeVideoFeeds.length + activeIssueOnlyFeeds.length
+          const hazardAlertCount = activeHazardFromVideos + activeHazardFromIssues
+          const garbageAlertCount = activeGarbageFromVideos + activeGarbageFromIssues
 
           if (!cancelled) {
             setBadgeCounts({
-              'live-alerts': unresolvedIssueCount(issues),
-              'camera-network': videos.length,
+              'live-alerts': liveAlertCount,
+              'hazard-alerts': hazardAlertCount,
+              'garbage-alerts': garbageAlertCount,
+              'camera-network': activeVideoFeeds.length,
               'citizen-reports': unresolvedComplaintCount(complaints),
             })
           }
@@ -232,6 +293,8 @@ export default function MainLayout({ session, onLogout = () => {} }) {
           if (!cancelled) {
             setBadgeCounts({
               'live-alerts': unresolvedIssueCount(issues),
+              'hazard-alerts': null,
+              'garbage-alerts': null,
               'camera-network': issues.length,
               'citizen-reports': unresolvedComplaintCount(complaints),
             })
@@ -245,6 +308,8 @@ export default function MainLayout({ session, onLogout = () => {} }) {
         if (!cancelled) {
           setBadgeCounts({
             'live-alerts': unresolvedIssueCount(issues),
+            'hazard-alerts': null,
+            'garbage-alerts': null,
             'camera-network': issues.length,
             'citizen-reports': null,
           })
@@ -266,6 +331,7 @@ export default function MainLayout({ session, onLogout = () => {} }) {
   const safePageKey = allowedPageIds.includes(activePage) ? activePage : (allowedPageIds[0] || 'live-alerts')
   const page = PAGES[safePageKey]
   const ActiveComponent = page?.component ?? LiveAlertsCommand
+  const activePageProps = page?.props || {}
 
   const handleRefresh = () => {
     setRefreshing(true)
@@ -370,7 +436,7 @@ export default function MainLayout({ session, onLogout = () => {} }) {
           {/* ── Content ──────────────────────────── */}
           <main className="ml-content">
             <PageTransition pageKey={activePage}>
-              <ActiveComponent session={session} refreshTick={refreshTick} />
+              <ActiveComponent session={session} refreshTick={refreshTick} {...activePageProps} />
             </PageTransition>
           </main>
         </div>
@@ -383,7 +449,7 @@ export default function MainLayout({ session, onLogout = () => {} }) {
 // CSS
 // ─────────────────────────────────────────────────────────────────────────────
 const LAYOUT_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 
   /* ── TOKENS ─────────────────────────────────── */
   [data-jatayu-theme="light"] {
@@ -492,7 +558,7 @@ const LAYOUT_CSS = `
     max-height: 100vh;
     overflow: hidden;
     background: var(--ml-bg);
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: 'Poppins', 'Segoe UI', sans-serif;
     transition: background 0.4s ease;
     position: relative;
   }
@@ -606,7 +672,7 @@ const LAYOUT_CSS = `
   }
 
   .ml-bc-root {
-    font-size: 10.5px;
+    font-size: 11.5px;
     color: var(--ml-bc-root);
     font-weight: 500;
     letter-spacing: 0.2px;
@@ -616,7 +682,7 @@ const LAYOUT_CSS = `
   .ml-breadcrumb svg { color: var(--ml-bc-root); opacity: 0.6; }
 
   .ml-bc-current {
-    font-size: 10.5px;
+    font-size: 11.5px;
     color: var(--ml-bc-current);
     font-weight: 600;
     transition: color 0.3s;
@@ -627,8 +693,8 @@ const LAYOUT_CSS = `
   }
 
   .ml-page-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 17px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 19px;
     font-weight: 800;
     color: var(--ml-title);
     letter-spacing: -0.4px;
@@ -676,15 +742,15 @@ const LAYOUT_CSS = `
     background: transparent;
     border: none;
     outline: none;
-    font-size: 12.5px;
+    font-size: 13.5px;
     color: var(--ml-search-text);
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Poppins', sans-serif;
     min-width: 0;
   }
   .ml-search-input::placeholder { color: var(--ml-search-placeholder); }
 
   .ml-search-kbd {
-    font-size: 10px;
+    font-size: 10.5px;
     padding: 2px 5px;
     border-radius: 4px;
     background: var(--ml-kbd-bg);
@@ -742,7 +808,7 @@ const LAYOUT_CSS = `
     border: 1px solid var(--ml-icon-btn-border);
     background: var(--ml-icon-btn-bg);
     color: var(--ml-icon-btn-text);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     display: flex;
@@ -763,7 +829,7 @@ const LAYOUT_CSS = `
     border-radius: 9px;
     background: var(--ml-avatar-bg);
     display: flex; align-items:center; justify-content:center;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     color: #fff;
     flex-shrink: 0;
@@ -787,18 +853,18 @@ const LAYOUT_CSS = `
   }
 
   .ml-clock-time {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--ml-clock-time);
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.5px;
     line-height: 1.1;
     transition: color 0.3s;
-    font-family: 'Syne', sans-serif;
+    font-family: 'Poppins', sans-serif;
   }
 
   .ml-clock-date {
-    font-size: 9.5px;
+    font-size: 10.5px;
     color: var(--ml-clock-date);
     transition: color 0.3s;
   }
@@ -825,7 +891,7 @@ const LAYOUT_CSS = `
   }
 
   .ml-page-sub {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--ml-sub);
     flex: 1;
     min-width: 0;
@@ -843,7 +909,7 @@ const LAYOUT_CSS = `
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 10.5px;
+    font-size: 11.5px;
     padding: 3px 10px;
     border-radius: 999px;
     background: var(--ml-pill-bg);

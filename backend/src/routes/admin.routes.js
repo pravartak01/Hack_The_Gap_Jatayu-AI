@@ -5,6 +5,7 @@ const {
   getHazards,
   routeHazard,
   getAllIssues,
+  resolveIssueByAdmin,
   getAdminDashboard,
   getCloudinaryHazardVideos,
   getCloudinaryHazardVideosByType,
@@ -46,6 +47,7 @@ router.post("/import-cloudinary-hazard", importCloudinaryHazard);
 
 // Issues
 router.get("/all-issues", getAllIssues);
+router.patch("/issues/resolve", resolveIssueByAdmin);
 
 // Complaints
 router.get("/complaints", getAllComplaints);

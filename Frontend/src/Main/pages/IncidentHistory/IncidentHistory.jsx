@@ -89,7 +89,7 @@ const Ic = {
 // ─── Data ─────────────────────────────────────────────────────────────────────
 const TYPE_FILTERS     = [{ id:'all',label:'All types' },{ id:'camera',label:'Camera' },{ id:'garbage',label:'Garbage' },{ id:'citizen',label:'Citizen' }]
 const DEPT_FILTERS     = [{ id:'all',label:'All depts' },{ id:'Police',label:'Police' },{ id:'Fire',label:'Fire' },{ id:'Municipal',label:'Municipal' },{ id:'Traffic',label:'Traffic' },{ id:'Admin',label:'Admin' }]
-const STATUS_FILTERS   = [{ id:'all',label:'All status' },{ id:'Resolved',label:'Resolved' },{ id:'In progress',label:'In progress' },{ id:'Escalated',label:'Escalated' }]
+const STATUS_FILTERS   = [{ id:'all',label:'All status' },{ id:'Pending',label:'Pending' },{ id:'Resolved',label:'Resolved' },{ id:'In progress',label:'In progress' },{ id:'Escalated',label:'Escalated' }]
 
 const SEV_META = {
   High:   { color:'#ef4444', bg:'rgba(239,68,68,0.1)',   border:'rgba(239,68,68,0.25)',   label:'High'   },
@@ -98,22 +98,23 @@ const SEV_META = {
 }
 
 const STATUS_META = {
+  'Pending':     { color:'#3b82f6', bg:'rgba(59,130,246,0.1)',  border:'rgba(59,130,246,0.25)',  icon: Ic.clock          },
   'Resolved':    { color:'#10b981', bg:'rgba(16,185,129,0.1)',  border:'rgba(16,185,129,0.25)',  icon: Ic.checkCircle   },
   'In progress': { color:'#f59e0b', bg:'rgba(245,158,11,0.1)', border:'rgba(245,158,11,0.25)', icon: Ic.clock          },
   'Escalated':   { color:'#ef4444', bg:'rgba(239,68,68,0.1)',  border:'rgba(239,68,68,0.25)',  icon: Ic.alertTriangle },
 }
 
 const TYPE_META = {
-  camera:  { label:'Camera alert',    icon: Ic.video, color:'#6366f1', bg:'rgba(99,102,241,0.1)'  },
-  garbage: { label:'Garbage hotspot', icon: Ic.trash, color:'#f97316', bg:'rgba(249,115,22,0.1)' },
-  citizen: { label:'Citizen report',  icon: Ic.mail,  color:'#06b6d4', bg:'rgba(6,182,212,0.1)'  },
+  camera:  { label:'Camera alert',    icon: Ic.video, color:'#f59e0b', bg:'rgba(245,158,11,0.12)' },
+  garbage: { label:'Garbage hotspot', icon: Ic.trash, color:'#16a34a', bg:'rgba(22,163,74,0.12)'  },
+  citizen: { label:'Citizen report',  icon: Ic.mail,  color:'#f97316', bg:'rgba(249,115,22,0.12)' },
 }
 
 const DEPT_META = {
-  Police:    { color:'#6366f1', bg:'rgba(99,102,241,0.1)'  },
+  Police:    { color:'#f59e0b', bg:'rgba(245,158,11,0.1)'  },
   Fire:      { color:'#ef4444', bg:'rgba(239,68,68,0.1)'   },
   Municipal: { color:'#10b981', bg:'rgba(16,185,129,0.1)'  },
-  Traffic:   { color:'#f59e0b', bg:'rgba(245,158,11,0.1)'  },
+  Traffic:   { color:'#16a34a', bg:'rgba(22,163,74,0.1)'   },
   Admin:     { color:'#94a3b8', bg:'rgba(148,163,184,0.1)' },
 }
 
@@ -135,8 +136,39 @@ function calcDuration(start, end) {
   return `${Math.floor(diff / 60)}h ${Math.round(diff % 60)}m`
 }
 
+function formatDateTime(value) {
+  if (!value) return ''
+  const dt = new Date(value)
+  if (Number.isNaN(dt.getTime())) return ''
+  return dt.toISOString().slice(0, 16).replace('T', ' ')
+}
+
+function toSortTs(value) {
+  if (!value) return 0
+  const ts = new Date(value).getTime()
+  return Number.isFinite(ts) ? ts : 0
+}
+
+function normalizeIncidentStatus(status) {
+  const raw = String(status || '').trim().toLowerCase()
+  if (!raw) return 'In progress'
+  if (raw === 'resolved' || raw === 'closed' || raw === 'completed') return 'Resolved'
+  if (raw === 'escalated') return 'Escalated'
+  if (raw === 'pending') return 'Pending'
+  if (raw === 'under review' || raw === 'routed' || raw === 'ongoing' || raw === 'in progress') return 'In progress'
+  return 'In progress'
+}
+
+function inferIncidentType(text) {
+  const t = String(text || '').toLowerCase()
+  if (t.includes('garbage') || t.includes('waste') || t.includes('dump')) return 'garbage'
+  if (t.includes('citizen') || t.includes('complaint') || t.includes('report')) return 'citizen'
+  return 'camera'
+}
+
 // ─── Stat card ────────────────────────────────────────────────────────────────
-function StatCard({ value, label, color, icon: Icon, delay }) {
+function StatCard({ value, label, color, icon, delay }) {
+  const Icon = icon || Ic.fileText
   return (
     <div className="ih-stat" style={{ '--delay': `${delay}s`, '--sc': color, '--sb': `${color}14`, '--sborder': `${color}28` }}>
       <div className="ih-stat-icon"><Icon width={14} height={14}/></div>
@@ -176,7 +208,6 @@ function FilterGroup({ label, filters, active, onChange }) {
 
 // ─── Expanded row detail ──────────────────────────────────────────────────────
 function ExpandedDetail({ incident }) {
-  const sm = STATUS_META[incident.status]
   const duration = calcDuration(incident.startedAt, incident.closedAt)
 
   return (
@@ -223,9 +254,9 @@ function ExpandedDetail({ incident }) {
 function IncidentRow({ incident, index }) {
   const [open, setOpen] = useState(false)
 
-  const tm = TYPE_META[incident.type]
-  const sm = STATUS_META[incident.status]
-  const sv = SEV_META[incident.severity]
+  const tm = TYPE_META[incident.type] || TYPE_META.camera
+  const sm = STATUS_META[incident.status] || STATUS_META['In progress']
+  const sv = SEV_META[incident.severity] || SEV_META.Medium
   const dm = DEPT_META[incident.forwardedTo] || DEPT_META.Admin
   const TypeIcon = tm.icon
   const StatusIcon = sm.icon
@@ -317,30 +348,116 @@ function mapIssueToIncident(issue) {
     deptRaw === 'MUNICIPAL' ? 'Municipal' :
     'Admin'
 
-  const type = issue.hazardType?.toLowerCase().includes('garbage') ? 'garbage'
-    : issue.hazardType?.toLowerCase().includes('citizen') ? 'citizen'
-    : 'camera'
+  const type = inferIncidentType(issue.hazardType)
 
   const severity = issue.status === 'Pending' ? 'High'
     : issue.status === 'Ongoing' ? 'Medium'
     : 'Low'
 
-  const startedAt = issue.createdAt ? new Date(issue.createdAt).toISOString().slice(0, 16).replace('T', ' ') : ''
-  const closedAt  = issue.status === 'Resolved' && issue.updatedAt ? new Date(issue.updatedAt).toISOString().slice(0, 16).replace('T', ' ') : null
+  const startedAt = formatDateTime(issue.createdAt)
+  const closedAt  = issue.status === 'Resolved' && issue.updatedAt ? formatDateTime(issue.updatedAt) : null
+  const normalizedStatus = normalizeIncidentStatus(issue.status === 'Ongoing' ? 'In progress' : issue.status)
 
   return {
+    uniqueKey: `issue-${id}`,
     id,
     type,
     title: issue.hazardType || 'Field issue',
     raisedFrom: 'Jatayu routing engine',
     forwardedTo,
     severity,
-    status: issue.status === 'Ongoing' ? 'In progress' : issue.status || 'In progress',
+    status: normalizedStatus,
     startedAt,
     closedAt,
     location: issue.location?.address || '—',
     actionSummary: issue.logs?.[issue.logs.length - 1]?.message || 'Issue created and assigned via Jatayu.',
     evidenceUrl: issue.evidenceUrl || '',
+    sortTs: toSortTs(issue.createdAt),
+  }
+}
+
+function mapComplaintToIncident(complaint) {
+  const id = complaint.complaintId || complaint._id
+  const normalizedStatus = normalizeIncidentStatus(complaint.status)
+  const forwardedTo = complaint.assignedDepartment
+    ? (String(complaint.assignedDepartment).toUpperCase() === 'POLICE' ? 'Police'
+      : String(complaint.assignedDepartment).toUpperCase() === 'FIRE' ? 'Fire'
+      : String(complaint.assignedDepartment).toUpperCase() === 'TRAFFIC' ? 'Traffic'
+      : String(complaint.assignedDepartment).toUpperCase() === 'MUNICIPAL' ? 'Municipal'
+      : 'Admin')
+    : 'Admin'
+
+  const type = complaint.category
+    ? inferIncidentType(complaint.category)
+    : 'citizen'
+
+  const severity = normalizedStatus === 'Resolved'
+    ? 'Low'
+    : normalizedStatus === 'Pending'
+      ? 'High'
+      : 'Medium'
+
+  const startedAt = formatDateTime(complaint.createdAt)
+  const closedAt = normalizedStatus === 'Resolved' ? formatDateTime(complaint.updatedAt) : null
+  const latestLog = Array.isArray(complaint.logs) && complaint.logs.length
+    ? complaint.logs[complaint.logs.length - 1]
+    : null
+  const mediaVideo = Array.isArray(complaint.media)
+    ? complaint.media.find((item) => String(item?.type || '').toLowerCase() === 'video')
+    : null
+
+  return {
+    uniqueKey: `complaint-${id}`,
+    id,
+    type,
+    title: complaint.title || complaint.category || 'Citizen complaint',
+    raisedFrom: complaint.citizenName ? `Citizen report · ${complaint.citizenName}` : 'Citizen report',
+    forwardedTo,
+    severity,
+    status: normalizedStatus,
+    startedAt,
+    closedAt,
+    location: complaint.location?.address || '—',
+    actionSummary: latestLog?.message || complaint.description || 'Complaint received and queued for action.',
+    evidenceUrl: mediaVideo?.url || '',
+    sortTs: toSortTs(complaint.createdAt),
+  }
+}
+
+function mapHazardToIncident(hazard) {
+  const id = hazard.issueId || hazard._id
+  const type = inferIncidentType(hazard.type)
+  const routedDept = String(hazard.routedDepartment || '').toUpperCase()
+  const forwardedTo = routedDept === 'POLICE'
+    ? 'Police'
+    : routedDept === 'FIRE'
+      ? 'Fire'
+      : routedDept === 'TRAFFIC'
+        ? 'Traffic'
+        : routedDept === 'MUNICIPAL'
+          ? 'Municipal'
+          : 'Admin'
+
+  const normalizedStatus = hazard.routed ? 'In progress' : 'Pending'
+  const startedAt = formatDateTime(hazard.createdAt || hazard.timestamp)
+
+  return {
+    uniqueKey: `hazard-${id}`,
+    id,
+    type,
+    title: hazard.type ? `Alert: ${hazard.type}` : 'Hazard alert',
+    raisedFrom: hazard.source ? `Alert source · ${hazard.source}` : 'Alert source',
+    forwardedTo,
+    severity: normalizedStatus === 'Pending' ? 'High' : 'Medium',
+    status: normalizedStatus,
+    startedAt,
+    closedAt: null,
+    location: hazard.location?.address || '—',
+    actionSummary: hazard.routed
+      ? `Routed to ${forwardedTo} department`
+      : 'Alert captured and awaiting routing.',
+    evidenceUrl: hazard.evidenceUrl || '',
+    sortTs: toSortTs(hazard.createdAt || hazard.timestamp),
   }
 }
 
@@ -367,15 +484,34 @@ export default function IncidentHistory({ session, refreshTick }) {
       try {
         const upperRole = String(role).toUpperCase()
         if (upperRole === 'ADMIN') {
-          const data = await api.getAllIssues(token)
+          const [issuesRes, complaintsRes, hazardsRes] = await Promise.allSettled([
+            api.getAllIssues(token),
+            api.getAllComplaints(token),
+            api.getHazards(token),
+          ])
           if (cancelled) return
-          const issues = data?.issues || []
-          setRows(issues.length ? issues.map(mapIssueToIncident) : INCIDENTS)
+
+          const issues = issuesRes.status === 'fulfilled' ? (issuesRes.value?.issues || []) : []
+          const complaints = complaintsRes.status === 'fulfilled' ? (complaintsRes.value?.complaints || []) : []
+          const hazards = hazardsRes.status === 'fulfilled' ? (hazardsRes.value?.hazards || []) : []
+
+          const mappedIssues = issues.map(mapIssueToIncident)
+          const mappedComplaints = complaints.map(mapComplaintToIncident)
+
+          const issueIds = new Set(issues.map((it) => String(it?.issueId || '')).filter(Boolean))
+          const onlyUnroutedHazards = hazards.filter((hz) => !hz?.issueId || !issueIds.has(String(hz.issueId)))
+          const mappedHazards = onlyUnroutedHazards.map(mapHazardToIncident)
+
+          const merged = [...mappedIssues, ...mappedComplaints, ...mappedHazards]
+            .sort((a, b) => (b.sortTs || 0) - (a.sortTs || 0))
+
+          setRows(merged.length ? merged : INCIDENTS)
         } else {
           const data = await api.getAssignedIssues(token, role)
           if (cancelled) return
           const issues = data?.issues || []
-          setRows(issues.length ? issues.map(mapIssueToIncident) : INCIDENTS)
+          const mapped = issues.map(mapIssueToIncident).sort((a, b) => (b.sortTs || 0) - (a.sortTs || 0))
+          setRows(mapped.length ? mapped : INCIDENTS)
         }
       } catch (err) {
         if (cancelled) return
@@ -472,7 +608,7 @@ export default function IncidentHistory({ session, refreshTick }) {
                 </tr>
               )}
               {!loading && filtered.map((inc, i) => (
-                <IncidentRow key={inc.id} incident={inc} index={i}/>
+                <IncidentRow key={inc.uniqueKey || inc.id} incident={inc} index={i}/>
               ))}
               {!loading && filtered.length === 0 && (
                 <tr>
@@ -513,7 +649,7 @@ const IH_CSS = `
     --ih-pill-border:     rgba(226,232,240,0.9);
     --ih-pill-text:       #64748b;
     --ih-pill-hover:      #e2e8f0;
-    --ih-pill-active-bg:  #4f46e5;
+    --ih-pill-active-bg:  #f59e0b;
     --ih-pill-active-text:#ffffff;
     --ih-table-bg:        #ffffff;
     --ih-table-border:    rgba(226,232,240,0.9);
@@ -521,8 +657,8 @@ const IH_CSS = `
     --ih-thead-bg:        #f8fafc;
     --ih-thead-text:      #64748b;
     --ih-th-border:       rgba(226,232,240,0.9);
-    --ih-row-hover:       rgba(99,102,241,0.03);
-    --ih-row-open-bg:     rgba(99,102,241,0.04);
+    --ih-row-hover:       rgba(245,158,11,0.08);
+    --ih-row-open-bg:     rgba(245,158,11,0.1);
     --ih-row-border:      rgba(226,232,240,0.7);
     --ih-row-text:        #334155;
     --ih-id-text:         #0f172a;
@@ -558,7 +694,7 @@ const IH_CSS = `
     --ih-pill-border:     rgba(255,255,255,0.07);
     --ih-pill-text:       #475569;
     --ih-pill-hover:      rgba(255,255,255,0.07);
-    --ih-pill-active-bg:  #4f46e5;
+    --ih-pill-active-bg:  #f59e0b;
     --ih-pill-active-text:#ffffff;
     --ih-table-bg:        #0f1623;
     --ih-table-border:    rgba(255,255,255,0.06);
@@ -566,8 +702,8 @@ const IH_CSS = `
     --ih-thead-bg:        #0a0e1a;
     --ih-thead-text:      #475569;
     --ih-th-border:       rgba(255,255,255,0.05);
-    --ih-row-hover:       rgba(99,102,241,0.06);
-    --ih-row-open-bg:     rgba(99,102,241,0.07);
+    --ih-row-hover:       rgba(245,158,11,0.14);
+    --ih-row-open-bg:     rgba(245,158,11,0.16);
     --ih-row-border:      rgba(255,255,255,0.04);
     --ih-row-text:        #94a3b8;
     --ih-id-text:         #e2e8f0;
@@ -632,7 +768,7 @@ const IH_CSS = `
 
   .ih-page-title {
     font-family: 'Syne', sans-serif;
-    font-size: 18px;
+    font-size: 24px;
     font-weight: 800;
     color: var(--ih-title);
     letter-spacing: -0.4px;
@@ -642,7 +778,7 @@ const IH_CSS = `
 
   .ih-page-sub {
     margin-top: 4px;
-    font-size: 12.5px;
+    font-size: 15px;
     color: var(--ih-sub);
     line-height: 1.6;
     max-width: 480px;
@@ -683,14 +819,14 @@ const IH_CSS = `
 
   .ih-stat-num {
     font-family: 'Syne', sans-serif;
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 800;
     color: var(--sc);
     line-height: 1;
   }
 
   .ih-stat-label {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--ih-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -721,7 +857,7 @@ const IH_CSS = `
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 10.5px;
+    font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.7px;
@@ -730,7 +866,7 @@ const IH_CSS = `
   }
 
   .ih-clear-btn {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--ih-clear-text);
     background: var(--ih-clear-bg);
@@ -757,7 +893,7 @@ const IH_CSS = `
   }
 
   .ih-filter-group-label {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.7px;
@@ -782,7 +918,7 @@ const IH_CSS = `
     border: 1px solid var(--ih-pill-border);
     background: var(--ih-pill-bg);
     color: var(--ih-pill-text);
-    font-size: 11.5px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     font-family: 'DM Sans', sans-serif;
@@ -825,7 +961,7 @@ const IH_CSS = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 11.5px;
+    font-size: 13px;
     color: var(--ih-result-text);
     padding: 0 2px;
     animation: ih-fade-in 0.4s 0.15s both;
@@ -838,7 +974,7 @@ const IH_CSS = `
   }
 
   .ih-result-hint {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--ih-muted);
     font-style: italic;
     transition: color 0.3s;
@@ -872,7 +1008,7 @@ const IH_CSS = `
   .ih-th {
     padding: 10px 14px;
     text-align: left;
-    font-size: 10.5px;
+    font-size: 11.5px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.7px;
@@ -922,14 +1058,14 @@ const IH_CSS = `
 
   .ih-id-text {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--ih-id-text);
     transition: color 0.3s;
   }
 
   .ih-type-label {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -941,7 +1077,7 @@ const IH_CSS = `
   .ih-td-title { min-width: 180px; }
 
   .ih-title-text {
-    font-size: 12.5px;
+    font-size: 14.5px;
     font-weight: 600;
     color: var(--ih-title-text);
     line-height: 1.3;
@@ -949,7 +1085,7 @@ const IH_CSS = `
   }
 
   .ih-source-text {
-    font-size: 10.5px;
+    font-size: 11.5px;
     color: var(--ih-source-text);
     margin-top: 2px;
     transition: color 0.3s;
@@ -962,7 +1098,7 @@ const IH_CSS = `
     gap: 4px;
     padding: 3px 9px;
     border-radius: 999px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     white-space: nowrap;
     transition: all 0.3s;
@@ -973,14 +1109,14 @@ const IH_CSS = `
 
   .ih-duration-val {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--ih-duration-val);
     transition: color 0.3s;
   }
 
   .ih-open-tag {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     color: var(--ih-open-tag-color);
     font-family: 'DM Sans', sans-serif;
@@ -1039,7 +1175,7 @@ const IH_CSS = `
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.6px;
@@ -1052,7 +1188,7 @@ const IH_CSS = `
     align-items: center;
     flex-wrap: wrap;
     gap: 6px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--ih-exp-val);
     line-height: 1.5;
     transition: color 0.3s;
@@ -1062,17 +1198,17 @@ const IH_CSS = `
 
   .ih-exp-duration {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     padding: 2px 7px;
     border-radius: 5px;
-    background: rgba(99,102,241,0.1);
-    color: #6366f1;
-    border: 1px solid rgba(99,102,241,0.2);
+    background: rgba(245,158,11,0.14);
+    color: #b45309;
+    border: 1px solid rgba(245,158,11,0.26);
   }
 
   .ih-exp-action {
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.6;
     padding: 9px 12px;
     border-radius: 9px;
@@ -1087,7 +1223,7 @@ const IH_CSS = `
   .ih-empty-td {
     padding: 40px;
     text-align: center;
-    font-size: 13px;
+    font-size: 14px;
     color: var(--ih-muted);
     transition: color 0.3s;
   }
