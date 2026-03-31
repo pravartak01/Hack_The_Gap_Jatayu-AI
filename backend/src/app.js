@@ -12,6 +12,7 @@ const municipalRoutes = require("./routes/municipal.routes");
 const citizenRoutes = require("./routes/citizen.routes");
 const coreRoutes = require("./routes/core.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
+const notificationRoutes = require("./routes/notification.routes");
 const { errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
@@ -39,6 +40,7 @@ app.use("/traffic", trafficRoutes);
 app.use("/municipal", municipalRoutes);
 app.use("/citizen", citizenRoutes);
 app.use("/dashboard", dashboardRoutes);
+app.use("/notifications", notificationRoutes);
 app.use("/", coreRoutes);
 
 app.use((req, res) => {
